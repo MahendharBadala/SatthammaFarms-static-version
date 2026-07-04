@@ -1,0 +1,87 @@
+{
+  "project_name": "SATTHAMMA FARMS",
+  "tagline": "prathiokkari intaa, nanyamaina panta",
+  "theme_archetype": "Archetype 1: Organic & Earthy (Light Theme)",
+  "brand_vibe": "Authentic, rural India warmth, premium organic, hand-crafted, trustworthy, earthy",
+  "color_palette": {
+    "background_base": "#F9F6F0",
+    "background_alt": "#EFEBE1",
+    "primary": "#2C4C3B",
+    "primary_hover": "#1E3629",
+    "accent_terracotta": "#C5684B",
+    "accent_gold": "#D4A373",
+    "text_main": "#2C2C2C",
+    "text_muted": "#6B6A66",
+    "border": "#E5E0D8"
+  },
+  "typography": {
+    "fonts_required_to_install": ["@fontsource/cormorant-garamond", "@fontsource/manrope"],
+    "heading_font": "Cormorant Garamond",
+    "body_font": "Manrope",
+    "scale": {
+      "h1": "text-5xl sm:text-6xl tracking-tighter font-semibold text-[#2C4C3B]",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-medium text-[#2C2C2C]",
+      "h3": "text-2xl font-medium text-[#2C2C2C]",
+      "body": "text-base leading-relaxed text-[#6B6A66]",
+      "overline": "text-xs uppercase tracking-[0.2em] font-bold text-[#C5684B]"
+    }
+  },
+  "design_system_rules": {
+    "spacing": "Generous spacing. Use p-8, p-12, p-16 for containers. Avoid cramped layouts.",
+    "borders_and_shadows": "Use 1px border (border-[#E5E0D8]) for cards. Shadows should be warm and diffuse, e.g., shadow-[0_8px_30px_rgba(44,76,59,0.06)].",
+    "radius": "Subtle roundness. rounded-xl or rounded-2xl for images and cards.",
+    "buttons": "Rounded-full (pill shape) for primary CTAs. bg-[#2C4C3B] text-white hover:bg-[#1E3629] transition-colors. Include data-testid.",
+    "texture": "Apply a subtle SVG noise/grain overlay on background to reduce digital flatness and enhance the 'handcrafted' feel.",
+    "logo_concept": "Custom SVG text 'SATTHAMMA FARMS' using Cormorant Garamond with a minimalist wheat or sun motif intertwined with the letter S."
+  },
+  "3D_and_interactions": {
+    "hero_3D": "Implement React Three Fiber (R3F) + Drei for the hero section. Create floating, slowly rotating 3D organic elements (wheat, corn, spice jars) using <Float>. Use warm ambientLight and directionalLight.",
+    "animations": "Use Framer Motion for staggered fade-up on product grids. Parallax scrolling for background images or textures.",
+    "micro_interactions": "Image zoom on hover for product cards. Button scale down on tap (active:scale-95)."
+  },
+  "page_blueprints": {
+    "Home": {
+      "Hero": "Split layout: Text (H1, overline, CTA) on left, R3F 3D Canvas on right displaying floating harvest items.",
+      "About": "Warm, earthy section explaining organic farming without harmful chemicals. Image of Indian farmer.",
+      "Categories": "Bento Grid (tetris mode) showcasing Grains, Spices, Pickles, Pulses. Asymmetrical layout.",
+      "Featured_Products": "Horizontal scroll or 4-col grid of top products. Handcrafted card style.",
+      "Testimonials": "Phase 2 placeholder card design. Customer review carousel.",
+      "Footer": "Large typography, quick links, contact info (email/phone), Instagram/YouTube links."
+    },
+    "Catalog": {
+      "Header": "Sticky crystal glass nav with backdrop-blur.",
+      "Layout": "Sidebar for category filters (corn, maize, paddy, etc.), main area for 3-col product grid.",
+      "Product_Card": "Image (70%), Title, Price, Add to Cart button (accent color)."
+    },
+    "Product_Detail": {
+      "Layout": "2-column. Left: Image/Video gallery. Right: Title, Price, Description, Add to Cart, Quality Badges (Organic, Handpicked, No Chemicals)."
+    },
+    "Admin_Dashboard": {
+      "Layout": "Shadcn-based functional dashboard. Sidebar nav. Data tables for orders and customers. Forms for product CRUD with image/video upload. Protected by auth."
+    }
+  },
+  "image_urls": {
+    "hero_farmer": "https://images.unsplash.com/photo-1762884110133-926e4195d3b9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBmYXJtZXIlMjBvcmdhbmljfGVufDB8fHx8MTc4MzE0MjE0NHww&ixlib=rb-4.1.0&q=85",
+    "about_farmer_2": "https://images.unsplash.com/photo-1585844687190-d14d7a9711b7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjBmYXJtZXIlMjBvcmdhbmljfGVufDB8fHx8MTc4MzE0MjE0NHww&ixlib=rb-4.1.0&q=85",
+    "category_spices": "https://images.unsplash.com/photo-1716816211590-c15a328a5ff0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwxfHxpbmRpYW4lMjBzcGljZXMlMjBtYXNhbGFzfGVufDB8fHx8MTc4MzE0MjE0NXww&ixlib=rb-4.1.0&q=85",
+    "category_spices_alt": "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxpbmRpYW4lMjBzcGljZXMlMjBtYXNhbGFzfGVufDB8fHx8MTc4MzE0MjE0NXww&ixlib=rb-4.1.0&q=85",
+    "category_grains": "https://images.unsplash.com/photo-1437252611977-07f74518abd7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxncmFpbnMlMjB3aGVhdCUyMGhhcnZlc3R8ZW58MHx8fHwxNzgzMTQyMTQ1fDA&ixlib=rb-4.1.0&q=85",
+    "category_grains_alt": "https://images.unsplash.com/photo-1561978248-bffcdd0457ad?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwyfHxncmFpbnMlMjB3aGVhdCUyMGhhcnZlc3R8ZW58MHx8fHwxNzgzMTQyMTQ1fDA&ixlib=rb-4.1.0&q=85",
+    "category_pickles": "https://images.unsplash.com/photo-1613271596363-4fb96ef16eac?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwzfHx0cmFkaXRpb25hbCUyMGluZGlhbiUyMHBpY2tsZSUyMGphcnxlbnwwfHx8fDE3ODMxNDIxNDV8MA&ixlib=rb-4.1.0&q=85",
+    "category_pickles_alt": "https://images.pexels.com/photos/11584813/pexels-photo-11584813.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "placeholder_product": "https://images.unsplash.com/photo-1581600140682-d4e68c8cde32?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwyfHxpbmRpYW4lMjBzcGljZXMlMjBtYXNhbGFzfGVufDB8fHx8MTc4MzE0MjE0NXww&ixlib=rb-4.1.0&q=85"
+  },
+  "testing_and_qa": {
+    "requirements": "All interactive elements, buttons, links, form inputs, and carts MUST have a 'data-testid' attribute (e.g., 'add-to-cart-btn', 'admin-login-submit')."
+  },
+  "instructions_to_main_agent": [
+    "Install the required font packages: @fontsource/cormorant-garamond and @fontsource/manrope.",
+    "Implement the base color palette in tailwind.config.js using exact hex codes.",
+    "Use Phosphor icons (@phosphor-icons/react) for earthy, rounded icon vibes.",
+    "Install React Three Fiber and Drei (three @react-three/fiber @react-three/drei) for the hero section.",
+    "Do NOT use placeholder text or dummy image URLs (like via.placeholder). ONLY use the URLs provided in this JSON.",
+    "Ensure the hero section 3D experience does not block the main CTA or text.",
+    "For the admin section, switch to a dense 'Control Room' grid layout using Shadcn components.",
+    "Ensure all interactive components have proper ARIA labels and data-testid attributes."
+  ]
+}
