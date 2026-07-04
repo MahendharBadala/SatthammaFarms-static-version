@@ -27,9 +27,9 @@ export default function Hero3D() {
       </div>
 
       {/* floating orbs */}
-      {orbs.map((o, i) => (
+      {orbs.map((o) => (
         <motion.div
-          key={i}
+          key={`orb-${o.x}-${o.y}-${o.size}`}
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1, y: [0, -18, 0], x: [0, 10, 0] }}
           transition={{

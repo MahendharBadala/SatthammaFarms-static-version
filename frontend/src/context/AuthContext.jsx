@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+axios.defaults.withCredentials = true;
 
 const AuthCtx = createContext(null);
 
@@ -10,15 +11,10 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const fetchMe = useCallback(async () => {
-    const token = localStorage.getItem("sf_token");
-    if (!token) { setUser(null); setLoading(false); return; }
     try {
-      const { data } = await axios.get(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await axios.get(`${API}/auth/me`);
       setUser(data);
     } catch {
-      localStorage.removeItem("sf_token");
       setUser(null);
     } finally { setLoading(false); }
   }, []);
@@ -27,27 +23,21 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await axios.post(`${API}/auth/login`, { email, password });
-    localStorage.setItem("sf_token", data.token);
     setUser(data.user);
     return data.user;
   };
   const register = async (payload) => {
     const { data } = await axios.post(`${API}/auth/register`, payload);
-    localStorage.setItem("sf_token", data.token);
     setUser(data.user);
     return data.user;
   };
-  const logout = () => {
-    localStorage.removeItem("sf_token");
+  const logout = async () => {
+    try { await axios.post(`${API}/auth/logout`); } catch { /* ignore */ }
     setUser(null);
-  };
-  const authHeaders = () => {
-    const t = localStorage.getItem("sf_token");
-    return t ? { Authorization: `Bearer ${t}` } : {};
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, register, logout, authHeaders }}>
+    <AuthCtx.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthCtx.Provider>
   );

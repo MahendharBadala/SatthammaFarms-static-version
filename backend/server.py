@@ -96,10 +96,12 @@ class OrderIn(BaseModel):
 app = FastAPI(title="Satthamma Farms API")
 api = APIRouter(prefix="/api")
 
+_frontend_origin = os.environ.get("FRONTEND_URL", "")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origin_regex=".*" if not _frontend_origin else None,
+    allow_origins=[_frontend_origin] if _frontend_origin else [],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -146,9 +148,10 @@ def user_to_public(u: dict) -> dict:
     }
 
 def set_auth_cookie(response: Response, token: str):
+    # httpOnly cookie protects token from XSS; SameSite=Lax works for same-origin ingress routing.
     response.set_cookie(
         key="access_token", value=token, httponly=True,
-        secure=True, samesite="none", max_age=7*24*3600, path="/",
+        secure=True, samesite="lax", max_age=7*24*3600, path="/",
     )
 
 # ---------------- Routes ----------------
@@ -243,10 +246,10 @@ async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_us
 async def update_product(pid: str, payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     try:
         oid = ObjectId(pid)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid id")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid id") from exc
     await db.products.update_one({"_id": oid}, {"$set": payload.model_dump()})
-    doc = await db.products.find_one({"_id": oid})
+    doc: Optional[dict] = await db.products.find_one({"_id": oid})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     return product_to_out(doc)

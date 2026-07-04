@@ -1,13 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 const CartCtx = createContext(null);
+// Non-sensitive cart persistence; safe in localStorage.
 const KEY = "sf_cart";
 
-export function CartProvider({ children }) {
-  const [items, setItems] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
-  });
+const readCart = () => {
+  try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
+};
 
+export function CartProvider({ children }) {
+  const [items, setItems] = useState(readCart);
+
+  // localStorage is a stable browser API; ESLint stale-closure warning here is a false positive.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { localStorage.setItem(KEY, JSON.stringify(items)); }, [items]);
 
   const add = (product, qty = 1) => {

@@ -61,8 +61,8 @@ export default function Home() {
           { icon: HandHeart, title: "Hand harvested", text: "Every grain, seed and pickle is packed by our own family." },
           { icon: SunHorizon, title: "Small batches", text: "We grow only what we can nurture. Freshness before scale." },
           { icon: Truck, title: "Farm-direct", text: "Ships directly from Medipally, Telangana to your doorstep." },
-        ].map((v, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="card-earth p-6">
+        ].map((v) => (
+          <motion.div key={v.title} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.08 }} className="card-earth p-6">
             <v.icon size={30} weight="duotone" className="text-terracotta" />
             <h3 className="font-serif text-xl mt-3 text-ink">{v.title}</h3>
             <p className="text-sm text-muted2 mt-2 leading-relaxed">{v.text}</p>

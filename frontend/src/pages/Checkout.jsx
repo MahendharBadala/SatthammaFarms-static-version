@@ -10,7 +10,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Checkout() {
   const { items, total, clear } = useCart();
-  const { user, authHeaders } = useAuth();
+  const { user } = useAuth();
   const nav = useNavigate();
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(user?.phone || "");
@@ -39,7 +39,7 @@ export default function Checkout() {
       const { data } = await axios.post(`${API}/orders`, {
         items: items.map(i => ({ product_id: i.id, quantity: i.quantity })),
         address, phone, notes,
-      }, { headers: authHeaders() });
+      });
       setPlaced(data);
       clear();
       toast.success("Order placed! We'll contact you shortly.");
