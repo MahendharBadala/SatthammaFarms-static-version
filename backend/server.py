@@ -194,6 +194,87 @@ async def logout(response: Response):
     response.delete_cookie("access_token", path="/")
     return {"ok": True}
 
+# --- Phone OTP (mock mode: OTP printed to server console) ---
+import random
+import re
+
+class OtpRequestIn(BaseModel):
+    phone: str  # E.164 like "+918500812044"
+
+class OtpVerifyIn(BaseModel):
+    phone: str
+    code: str
+    name: Optional[str] = None
+
+_PHONE_RE = re.compile(r"^\+[1-9]\d{6,14}$")
+
+def _normalize_phone(raw: str) -> str:
+    p = (raw or "").strip().replace(" ", "").replace("-", "")
+    if not _PHONE_RE.match(p):
+        raise HTTPException(status_code=400, detail="Invalid phone. Use E.164 like +919999999999")
+    return p
+
+@api.post("/auth/otp/request")
+async def otp_request(payload: OtpRequestIn):
+    phone = _normalize_phone(payload.phone)
+    # rate-limit: 30s between requests
+    last = await db.otp_codes.find_one({"phone": phone}, sort=[("created_at", -1)])
+    now = datetime.now(timezone.utc)
+    if last:
+        last_at = datetime.fromisoformat(last["created_at"])
+        if (now - last_at).total_seconds() < 30:
+            raise HTTPException(status_code=429, detail="Please wait a few seconds before requesting another OTP")
+    code = f"{random.randint(0, 999999):06d}"
+    await db.otp_codes.insert_one({
+        "phone": phone,
+        "code": code,
+        "attempts": 0,
+        "used": False,
+        "created_at": now.isoformat(),
+        "expires_at": (now + timedelta(minutes=10)).isoformat(),
+    })
+    # MOCK: log to server console. Replace with Twilio/MSG91 later.
+    logger.info(f"[SATTHAMMA OTP][MOCK] phone={phone} code={code} (valid 10 min)")
+    print(f"\n===== SATTHAMMA OTP =====\nphone: {phone}\ncode : {code}\n=========================\n", flush=True)
+    return {"ok": True, "message": "OTP sent (mock mode — check server console)"}
+
+@api.post("/auth/otp/verify")
+async def otp_verify(payload: OtpVerifyIn, response: Response):
+    phone = _normalize_phone(payload.phone)
+    code = (payload.code or "").strip()
+    rec = await db.otp_codes.find_one({"phone": phone, "used": False}, sort=[("created_at", -1)])
+    if not rec:
+        raise HTTPException(status_code=400, detail="No OTP found. Please request a new one.")
+    if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    if rec.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=429, detail="Too many wrong attempts. Request a new OTP.")
+    if rec["code"] != code:
+        await db.otp_codes.update_one({"_id": rec["_id"]}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Incorrect OTP")
+    await db.otp_codes.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
+
+    user = await db.users.find_one({"phone": phone})
+    if not user:
+        # No auto-register: require name on first-time signup
+        if not payload.name or not payload.name.strip():
+            return {"needs_name": True}
+        doc = {
+            "email": "",
+            "name": payload.name.strip(),
+            "phone": phone,
+            "password_hash": "",
+            "role": "customer",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        res = await db.users.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        user = doc
+
+    token = create_access_token(str(user["_id"]), user.get("email", "") or phone, user.get("role", "customer"))
+    set_auth_cookie(response, token)
+    return {"user": user_to_public(user), "needs_name": False}
+
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return user_to_public({**user, "_id": user["id"]})
@@ -329,7 +410,10 @@ async def all_users(_admin: dict = Depends(get_admin_user)):
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def on_startup():
-    await db.users.create_index("email", unique=True)
+    await db.users.create_index("email", unique=True, partialFilterExpression={"email": {"$type": "string", "$gt": ""}})
+    await db.users.create_index("phone")
+    # OTP TTL cleanup: docs auto-purged 15 min after creation
+    await db.otp_codes.create_index("created_at")
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@satthammafarms.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
