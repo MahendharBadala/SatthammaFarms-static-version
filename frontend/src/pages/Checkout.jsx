@@ -37,6 +37,10 @@ export default function Checkout() {
   const [utr, setUtr] = useState("");
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponInfo, setCouponInfo] = useState(null); // {code, discount_amount, new_total}
+  const [couponErr, setCouponErr] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   useEffect(() => { axios.get(`${API}/payments/settings`).then(r => setSettings(r.data)); }, []);
 
@@ -54,12 +58,29 @@ export default function Checkout() {
     </div>
   );
 
+  const applyCoupon = async () => {
+    setCouponErr("");
+    const code = couponCode.trim().toUpperCase();
+    if (!code) { setCouponErr("Enter a coupon code"); return; }
+    setCouponLoading(true);
+    try {
+      const { data } = await axios.post(`${API}/coupons/validate`, { code, cart_total: total });
+      setCouponInfo(data);
+      toast.success(`Coupon applied — you save ₹${data.discount_amount}`);
+    } catch (e) {
+      setCouponInfo(null);
+      setCouponErr(e?.response?.data?.detail || "Invalid coupon");
+    } finally { setCouponLoading(false); }
+  };
+  const removeCoupon = () => { setCouponInfo(null); setCouponCode(""); setCouponErr(""); };
+
   const place = async (e) => {
     e.preventDefault(); setLoading(true);
     try {
       const { data } = await axios.post(`${API}/orders`, {
         items: items.map(i => ({ product_id: i.id, quantity: i.quantity })),
         address, phone, notes,
+        coupon_code: couponInfo ? couponInfo.code : "",
       });
       setOrder({ ...data, address, phone });
       clear();
@@ -156,6 +177,8 @@ export default function Checkout() {
     </div>
   );
 
+  const finalTotal = couponInfo ? couponInfo.new_total : total;
+
   return (
     <div className="container mx-auto py-12 grid lg:grid-cols-3 gap-8">
       <form onSubmit={place} className="lg:col-span-2 card-earth p-8 space-y-4" data-testid="checkout-form">
@@ -172,7 +195,7 @@ export default function Checkout() {
           <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Notes (optional)</label>
           <textarea data-testid="checkout-notes" rows="2" value={notes} onChange={e => setNotes(e.target.value)} className="mt-1 w-full px-4 py-3 border border-edge rounded-xl bg-white focus:outline-none focus:border-forest" />
         </div>
-        <button data-testid="checkout-place" disabled={loading} className="btn-primary w-full">{loading ? "Placing..." : `Continue to UPI · ₹${total}`}</button>
+        <button data-testid="checkout-place" disabled={loading} className="btn-primary w-full">{loading ? "Placing..." : `Continue to UPI · ₹${finalTotal}`}</button>
         <p className="text-xs text-muted2 text-center">Pay with any UPI app · GPay, PhonePe, Paytm, BHIM & more.</p>
       </form>
       <div className="card-earth p-6 h-fit">
@@ -190,7 +213,43 @@ export default function Checkout() {
           ))}
         </div>
         <div className="border-t border-edge my-4"></div>
-        <div className="flex justify-between font-serif text-xl text-forest font-semibold"><span>Total</span><span>₹{total}</span></div>
+        {/* Coupon */}
+        <div data-testid="coupon-panel" className="mb-4">
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Coupon code</label>
+          {couponInfo ? (
+            <div className="mt-1 flex items-center justify-between bg-forest/5 border border-forest/20 rounded-lg px-3 py-2">
+              <div>
+                <div className="font-mono text-sm text-forest" data-testid="coupon-applied-code">{couponInfo.code}</div>
+                <div className="text-xs text-muted2">You save ₹{couponInfo.discount_amount}</div>
+              </div>
+              <button type="button" data-testid="coupon-remove" onClick={removeCoupon} className="text-xs text-terracotta hover:underline">Remove</button>
+            </div>
+          ) : (
+            <>
+              <div className="mt-1 flex gap-2">
+                <input
+                  data-testid="coupon-input"
+                  value={couponCode}
+                  onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                  placeholder="HARVEST10"
+                  className="flex-1 px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest uppercase text-sm"
+                />
+                <button type="button" data-testid="coupon-apply" onClick={applyCoupon} disabled={couponLoading} className="btn-outline !py-2 !px-4 text-sm">
+                  {couponLoading ? "..." : "Apply"}
+                </button>
+              </div>
+              {couponErr && <p data-testid="coupon-error" className="text-xs text-terracotta mt-1">{couponErr}</p>}
+            </>
+          )}
+        </div>
+        <div className="flex justify-between text-sm text-muted2"><span>Subtotal</span><span>₹{total}</span></div>
+        {couponInfo && (
+          <div className="flex justify-between text-sm text-forest mt-1" data-testid="summary-discount">
+            <span>Discount ({couponInfo.code})</span><span>− ₹{couponInfo.discount_amount}</span>
+          </div>
+        )}
+        <div className="border-t border-edge my-3"></div>
+        <div className="flex justify-between font-serif text-xl text-forest font-semibold"><span>Total</span><span data-testid="summary-total">₹{finalTotal}</span></div>
       </div>
     </div>
   );

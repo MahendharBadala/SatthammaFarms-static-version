@@ -189,3 +189,231 @@ export function UsersTable({ users }) {
     </div>
   );
 }
+
+// ---------------- Coupons ----------------
+const EMPTY_COUPON = { code: "", type: "percent", value: 10, min_order: 0, max_uses: "", expires_at: "", active: true };
+
+export function CouponsManager({ coupons, onSave, onDelete, onToggleActive }) {
+  const [form, setForm] = React.useState(EMPTY_COUPON);
+  const [editing, setEditing] = React.useState(null);
+
+  const startEdit = (c) => {
+    setEditing(c.id);
+    setForm({
+      code: c.code,
+      type: c.type,
+      value: c.value,
+      min_order: c.min_order || 0,
+      max_uses: c.max_uses ?? "",
+      expires_at: c.expires_at ? c.expires_at.slice(0, 10) : "",
+      active: c.active,
+    });
+  };
+  const cancel = () => { setEditing(null); setForm(EMPTY_COUPON); };
+
+  const submit = (e) => {
+    e.preventDefault();
+    const payload = {
+      code: form.code.trim().toUpperCase(),
+      type: form.type,
+      value: Number(form.value),
+      min_order: Number(form.min_order) || 0,
+      max_uses: form.max_uses === "" || form.max_uses === null ? null : Number(form.max_uses),
+      expires_at: form.expires_at ? new Date(form.expires_at + "T23:59:59Z").toISOString() : null,
+      active: !!form.active,
+    };
+    onSave(editing, payload, () => { cancel(); });
+  };
+
+  return (
+    <div className="grid lg:grid-cols-[420px,1fr] gap-8" data-testid="admin-coupons">
+      <form onSubmit={submit} className="card-earth p-6 h-fit sticky top-24 space-y-3" data-testid="coupon-form">
+        <h3 className="font-serif text-2xl text-ink">{editing ? "Edit coupon" : "Add coupon"}</h3>
+        <div>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Code</label>
+          <input data-testid="coupon-code" required value={form.code} onChange={e => setForm({ ...form, code: e.target.value })}
+            placeholder="HARVEST10" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest uppercase" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Type</label>
+            <select data-testid="coupon-type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}
+              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
+              <option value="percent">Percent (%)</option>
+              <option value="flat">Flat (₹)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
+              Value {form.type === "percent" ? "(%)" : "(₹)"}
+            </label>
+            <input data-testid="coupon-value" required type="number" min="0" step="0.01" value={form.value}
+              onChange={e => setForm({ ...form, value: e.target.value })}
+              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Min order (₹)</label>
+          <input data-testid="coupon-min-order" type="number" min="0" value={form.min_order}
+            onChange={e => setForm({ ...form, min_order: e.target.value })}
+            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Max uses</label>
+            <input data-testid="coupon-max-uses" type="number" min="0" placeholder="unlimited" value={form.max_uses}
+              onChange={e => setForm({ ...form, max_uses: e.target.value })}
+              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Expires</label>
+            <input data-testid="coupon-expires" type="date" value={form.expires_at}
+              onChange={e => setForm({ ...form, expires_at: e.target.value })}
+              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+          </div>
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm pt-2">
+          <input data-testid="coupon-active" type="checkbox" checked={form.active}
+            onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
+        </label>
+        <div className="flex gap-2 pt-2">
+          <button data-testid="coupon-save" className="btn-primary flex-1">{editing ? "Update" : "Add coupon"}</button>
+          {editing && <button type="button" onClick={cancel} className="btn-outline">Cancel</button>}
+        </div>
+      </form>
+      <div className="space-y-3" data-testid="coupon-list">
+        {coupons.length === 0 && <div className="text-muted2 text-center py-16">No coupons yet. Create one to run a promo.</div>}
+        {coupons.map(c => (
+          <div key={c.id} className="card-earth p-5 flex flex-wrap items-center gap-4">
+            <div className="flex-1 min-w-[220px]">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-lg text-ink" data-testid={`coupon-row-code-${c.id}`}>{c.code}</span>
+                <span className={`chip ${c.active ? "!bg-forest/10 !text-forest" : "!bg-muted2/10 !text-muted2"}`}>{c.active ? "Active" : "Inactive"}</span>
+              </div>
+              <div className="text-sm text-muted2 mt-1">
+                {c.type === "percent" ? `${c.value}% off` : `₹${c.value} off`}
+                {c.min_order > 0 && ` · min ₹${c.min_order}`}
+                {c.max_uses ? ` · ${c.uses}/${c.max_uses} used` : ` · ${c.uses} used`}
+                {c.expires_at && ` · expires ${new Date(c.expires_at).toLocaleDateString()}`}
+              </div>
+            </div>
+            <button data-testid={`coupon-toggle-${c.id}`} onClick={() => onToggleActive(c)}
+              className="text-sm rounded-full border border-edge px-3 py-1 hover:bg-cream2">
+              {c.active ? "Deactivate" : "Activate"}
+            </button>
+            <button data-testid={`coupon-edit-${c.id}`} onClick={() => startEdit(c)}
+              className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
+            <button data-testid={`coupon-delete-${c.id}`} onClick={() => onDelete(c.id)}
+              className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta"><Trash size={16} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Banners ----------------
+const EMPTY_BANNER = { kind: "slider", title: "", subtitle: "", image_url: "", cta_label: "", cta_link: "", active: true, sort_order: 0 };
+
+export function BannersManager({ banners, onSave, onDelete, onToggleActive }) {
+  const [form, setForm] = React.useState(EMPTY_BANNER);
+  const [editing, setEditing] = React.useState(null);
+
+  const startEdit = (b) => {
+    setEditing(b.id);
+    setForm({ kind: b.kind, title: b.title, subtitle: b.subtitle, image_url: b.image_url, cta_label: b.cta_label, cta_link: b.cta_link, active: b.active, sort_order: b.sort_order || 0 });
+  };
+  const cancel = () => { setEditing(null); setForm(EMPTY_BANNER); };
+
+  const submit = (e) => {
+    e.preventDefault();
+    onSave(editing, { ...form, sort_order: Number(form.sort_order) || 0 }, () => { cancel(); });
+  };
+
+  return (
+    <div className="grid lg:grid-cols-[420px,1fr] gap-8" data-testid="admin-banners">
+      <form onSubmit={submit} className="card-earth p-6 h-fit sticky top-24 space-y-3" data-testid="banner-form">
+        <h3 className="font-serif text-2xl text-ink">{editing ? "Edit banner" : "Add banner"}</h3>
+        <div>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Placement</label>
+          <select data-testid="banner-kind" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}
+            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
+            <option value="slider">Top slider (above hero)</option>
+            <option value="promo">Promo card (below hero)</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Title</label>
+          <input data-testid="banner-title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Subtitle</label>
+          <input data-testid="banner-subtitle" value={form.subtitle} onChange={e => setForm({ ...form, subtitle: e.target.value })}
+            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+        </div>
+        <MediaUploader
+          kind="image"
+          label="Banner image"
+          value={form.image_url}
+          onChange={(url) => setForm({ ...form, image_url: url })}
+          testId="upload-banner-image"
+          compact
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">CTA label</label>
+            <input data-testid="banner-cta-label" value={form.cta_label} onChange={e => setForm({ ...form, cta_label: e.target.value })}
+              placeholder="Shop now" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">CTA link</label>
+            <input data-testid="banner-cta-link" value={form.cta_link} onChange={e => setForm({ ...form, cta_link: e.target.value })}
+              placeholder="/products" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Sort order</label>
+          <input data-testid="banner-sort" type="number" value={form.sort_order}
+            onChange={e => setForm({ ...form, sort_order: e.target.value })}
+            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm pt-2">
+          <input data-testid="banner-active" type="checkbox" checked={form.active}
+            onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
+        </label>
+        <div className="flex gap-2 pt-2">
+          <button data-testid="banner-save" className="btn-primary flex-1">{editing ? "Update" : "Add banner"}</button>
+          {editing && <button type="button" onClick={cancel} className="btn-outline">Cancel</button>}
+        </div>
+      </form>
+      <div className="space-y-3" data-testid="banner-list">
+        {banners.length === 0 && <div className="text-muted2 text-center py-16">No banners yet. Create a slider or promo card for your Home page.</div>}
+        {banners.map(b => (
+          <div key={b.id} className="card-earth p-4 flex flex-wrap items-center gap-4">
+            {b.image_url ? (
+              <img src={resolveMediaUrl(b.image_url)} alt="" className="w-24 h-16 object-cover rounded-lg" />
+            ) : (
+              <div className="w-24 h-16 bg-cream2 rounded-lg" />
+            )}
+            <div className="flex-1 min-w-[220px]">
+              <div className="text-[10px] uppercase tracking-widest text-terracotta">{b.kind === "slider" ? "Top slider" : "Promo card"} · order {b.sort_order}</div>
+              <div className="font-serif text-xl text-ink" data-testid={`banner-row-title-${b.id}`}>{b.title}</div>
+              <div className="text-sm text-muted2">{b.subtitle}</div>
+              {b.cta_link && <div className="text-xs text-forest mt-1">{b.cta_label || "CTA"} → {b.cta_link}</div>}
+            </div>
+            <span className={`chip ${b.active ? "!bg-forest/10 !text-forest" : "!bg-muted2/10 !text-muted2"}`}>{b.active ? "Active" : "Inactive"}</span>
+            <button data-testid={`banner-toggle-${b.id}`} onClick={() => onToggleActive(b)}
+              className="text-sm rounded-full border border-edge px-3 py-1 hover:bg-cream2">
+              {b.active ? "Deactivate" : "Activate"}
+            </button>
+            <button data-testid={`banner-edit-${b.id}`} onClick={() => startEdit(b)}
+              className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
+            <button data-testid={`banner-delete-${b.id}`} onClick={() => onDelete(b.id)}
+              className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta"><Trash size={16} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

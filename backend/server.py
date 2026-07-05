@@ -94,6 +94,7 @@ class OrderIn(BaseModel):
     address: str
     phone: str
     notes: Optional[str] = ""
+    coupon_code: Optional[str] = ""
 
 class PaymentSettingsIn(BaseModel):
     provider: str = "upi_manual"      # upi_manual | razorpay | disabled
@@ -109,6 +110,31 @@ class OrderConfirmIn(BaseModel):
 
 class OrderStatusIn(BaseModel):
     status: str  # pending | payment_pending_verification | paid | packed | shipped | delivered | cancelled
+
+# ---------------- Coupons ----------------
+class CouponIn(BaseModel):
+    code: str
+    type: str = "percent"  # percent | flat
+    value: float = 0
+    min_order: float = 0
+    max_uses: Optional[int] = None  # None or 0 = unlimited
+    expires_at: Optional[str] = None  # ISO date string; None = no expiry
+    active: bool = True
+
+class CouponValidateIn(BaseModel):
+    code: str
+    cart_total: float = 0
+
+# ---------------- Banners ----------------
+class BannerIn(BaseModel):
+    kind: str = "slider"  # slider | promo
+    title: str = ""
+    subtitle: str = ""
+    image_url: str = ""
+    cta_label: str = ""
+    cta_link: str = ""
+    active: bool = True
+    sort_order: int = 0
 
 # ---------------- App ----------------
 app = FastAPI(title="Satthamma Farms API")
@@ -408,10 +434,28 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
             "quantity": int(it.quantity),
             "line_total": line,
         })
+    # Apply coupon if provided
+    subtotal = total
+    discount_amount = 0.0
+    coupon_applied = None
+    code = (payload.coupon_code or "").strip().upper()
+    if code:
+        coupon = await db.coupons.find_one({"code": code})
+        ok, discount_amount, reason = _evaluate_coupon(coupon, subtotal)
+        if not ok:
+            raise HTTPException(status_code=400, detail=reason)
+        total = max(0.0, subtotal - discount_amount)
+        coupon_applied = {
+            "code": coupon["code"], "type": coupon["type"], "value": coupon["value"],
+            "discount_amount": discount_amount,
+        }
     doc = {
         "user_id": user["id"],
         "user_email": user["email"],
         "items": items_full,
+        "subtotal": subtotal,
+        "discount_amount": discount_amount,
+        "coupon": coupon_applied,
         "total": total,
         "address": payload.address,
         "phone": payload.phone,
@@ -421,13 +465,16 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
     }
     res = await db.orders.insert_one(doc)
     doc["_id"] = res.inserted_id
+    # Increment coupon usage
+    if coupon_applied:
+        await db.coupons.update_one({"code": code}, {"$inc": {"uses": 1}})
     order_view = {"id": str(res.inserted_id), "total": total, "items": items_full, "address": payload.address, "phone": payload.phone}
     # Confirmation emails — buyer + admin
     if user.get("email"):
         _send_email(user["email"], f"Order confirmed · ₹{total} · Satthamma Farms", _order_html(order_view, "buyer"))
     admin_email = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "satthammafarms@gmail.com")
     _send_email(admin_email, f"[Satthamma] New order ₹{total} from {user.get('email') or user.get('phone','')}", _order_html(order_view, "admin"))
-    return {"id": str(res.inserted_id), "total": total, "status": "pending"}
+    return {"id": str(res.inserted_id), "total": total, "subtotal": subtotal, "discount_amount": discount_amount, "status": "pending"}
 
 @api.get("/orders/mine")
 async def my_orders(user: dict = Depends(get_current_user)):
@@ -532,6 +579,162 @@ async def admin_update_order_status(oid: str, payload: OrderStatusIn, _admin: di
                     f"<p style='font-family:Georgia,serif;font-style:italic;color:#C5684B'>\"prathiokkari intaa, nanyamaina panta\"</p></div>")
             _send_email(buyer_email, subj, html, plain=msg)
     return {"ok": True, "status": payload.status}
+
+# --- Coupons ---
+def _coupon_to_out(c: dict) -> dict:
+    return {
+        "id": str(c["_id"]),
+        "code": c.get("code", ""),
+        "type": c.get("type", "percent"),
+        "value": float(c.get("value", 0)),
+        "min_order": float(c.get("min_order", 0)),
+        "max_uses": c.get("max_uses"),
+        "expires_at": c.get("expires_at"),
+        "active": bool(c.get("active", True)),
+        "uses": int(c.get("uses", 0)),
+        "created_at": c.get("created_at", ""),
+    }
+
+def _evaluate_coupon(coupon: Optional[dict], cart_total: float) -> tuple[bool, float, str]:
+    if not coupon:
+        return False, 0.0, "Invalid coupon code"
+    if not coupon.get("active", True):
+        return False, 0.0, "Coupon is not active"
+    exp = coupon.get("expires_at")
+    if exp:
+        try:
+            if datetime.fromisoformat(exp) < datetime.now(timezone.utc):
+                return False, 0.0, "Coupon has expired"
+        except Exception:
+            pass
+    max_uses = coupon.get("max_uses")
+    if max_uses and int(coupon.get("uses", 0)) >= int(max_uses):
+        return False, 0.0, "Coupon usage limit reached"
+    min_order = float(coupon.get("min_order", 0) or 0)
+    if cart_total < min_order:
+        return False, 0.0, f"Minimum order ₹{min_order:g} required for this coupon"
+    ctype = coupon.get("type", "percent")
+    val = float(coupon.get("value", 0) or 0)
+    if ctype == "percent":
+        discount = round(cart_total * val / 100.0, 2)
+    else:
+        discount = min(val, cart_total)
+    return True, float(discount), "ok"
+
+@api.post("/coupons/validate")
+async def validate_coupon(payload: CouponValidateIn):
+    code = (payload.code or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Enter a coupon code")
+    coupon = await db.coupons.find_one({"code": code})
+    ok, discount, reason = _evaluate_coupon(coupon, float(payload.cart_total or 0))
+    if not ok:
+        raise HTTPException(status_code=400, detail=reason)
+    return {
+        "code": coupon["code"],
+        "type": coupon["type"],
+        "value": float(coupon["value"]),
+        "discount_amount": discount,
+        "new_total": max(0.0, float(payload.cart_total) - discount),
+    }
+
+@api.get("/admin/coupons")
+async def admin_list_coupons(_admin: dict = Depends(get_admin_user)):
+    docs = await db.coupons.find({}).sort("created_at", -1).to_list(500)
+    return [_coupon_to_out(d) for d in docs]
+
+@api.post("/admin/coupons")
+async def admin_create_coupon(payload: CouponIn, _admin: dict = Depends(get_admin_user)):
+    code = payload.code.strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Code is required")
+    if await db.coupons.find_one({"code": code}):
+        raise HTTPException(status_code=400, detail="A coupon with this code already exists")
+    doc = payload.model_dump()
+    doc["code"] = code
+    doc["uses"] = 0
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.coupons.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return _coupon_to_out(doc)
+
+@api.put("/admin/coupons/{cid}")
+async def admin_update_coupon(cid: str, payload: CouponIn, _admin: dict = Depends(get_admin_user)):
+    try:
+        oid = ObjectId(cid)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid id") from exc
+    data = payload.model_dump()
+    data["code"] = data["code"].strip().upper()
+    await db.coupons.update_one({"_id": oid}, {"$set": data})
+    doc = await db.coupons.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Coupon not found")
+    return _coupon_to_out(doc)
+
+@api.delete("/admin/coupons/{cid}")
+async def admin_delete_coupon(cid: str, _admin: dict = Depends(get_admin_user)):
+    try:
+        await db.coupons.delete_one({"_id": ObjectId(cid)})
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid id") from exc
+    return {"ok": True}
+
+# --- Banners ---
+def _banner_to_out(b: dict) -> dict:
+    return {
+        "id": str(b["_id"]),
+        "kind": b.get("kind", "slider"),
+        "title": b.get("title", ""),
+        "subtitle": b.get("subtitle", ""),
+        "image_url": b.get("image_url", ""),
+        "cta_label": b.get("cta_label", ""),
+        "cta_link": b.get("cta_link", ""),
+        "active": bool(b.get("active", True)),
+        "sort_order": int(b.get("sort_order", 0)),
+        "created_at": b.get("created_at", ""),
+    }
+
+@api.get("/banners")
+async def public_list_banners(kind: Optional[str] = None):
+    q: dict = {"active": True}
+    if kind:
+        q["kind"] = kind
+    docs = await db.banners.find(q).sort([("sort_order", 1), ("created_at", -1)]).to_list(100)
+    return [_banner_to_out(d) for d in docs]
+
+@api.get("/admin/banners")
+async def admin_list_banners(_admin: dict = Depends(get_admin_user)):
+    docs = await db.banners.find({}).sort([("sort_order", 1), ("created_at", -1)]).to_list(500)
+    return [_banner_to_out(d) for d in docs]
+
+@api.post("/admin/banners")
+async def admin_create_banner(payload: BannerIn, _admin: dict = Depends(get_admin_user)):
+    doc = payload.model_dump()
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    res = await db.banners.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return _banner_to_out(doc)
+
+@api.put("/admin/banners/{bid}")
+async def admin_update_banner(bid: str, payload: BannerIn, _admin: dict = Depends(get_admin_user)):
+    try:
+        oid = ObjectId(bid)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid id") from exc
+    await db.banners.update_one({"_id": oid}, {"$set": payload.model_dump()})
+    doc = await db.banners.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return _banner_to_out(doc)
+
+@api.delete("/admin/banners/{bid}")
+async def admin_delete_banner(bid: str, _admin: dict = Depends(get_admin_user)):
+    try:
+        await db.banners.delete_one({"_id": ObjectId(bid)})
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid id") from exc
+    return {"ok": True}
 
 # --- Email (SendGrid — auto mock mode until SENDGRID_API_KEY is set) ---
 def _send_email(to_email: str, subject: str, html: str, plain: Optional[str] = None) -> dict:

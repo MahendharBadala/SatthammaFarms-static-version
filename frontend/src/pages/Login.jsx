@@ -4,11 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { Logo } from "../components/Logo";
 import PhoneLogin from "../components/auth/PhoneLogin";
-import { EnvelopeSimple, DeviceMobile } from "@phosphor-icons/react";
+import { EnvelopeSimple, DeviceMobile, Eye, EyeSlash } from "@phosphor-icons/react";
 
 function EmailForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -37,7 +38,25 @@ function EmailForm() {
       </div>
       <div>
         <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Password</label>
-        <input data-testid="login-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className="mt-1 w-full px-4 py-3 border border-edge rounded-xl focus:outline-none focus:border-forest bg-white" />
+        <div className="relative mt-1">
+          <input
+            data-testid="login-password"
+            type={showPassword ? "text" : "password"}
+            required
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            className="w-full px-4 py-3 pr-12 border border-edge rounded-xl focus:outline-none focus:border-forest bg-white"
+          />
+          <button
+            type="button"
+            data-testid="login-password-toggle"
+            onClick={() => setShowPassword(v => !v)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            className="absolute inset-y-0 right-3 flex items-center text-muted2 hover:text-forest"
+          >
+            {showPassword ? <EyeSlash size={20} weight="duotone" /> : <Eye size={20} weight="duotone" />}
+          </button>
+        </div>
       </div>
       {err && <p data-testid="login-error" className="text-sm text-terracotta">{err}</p>}
       <button data-testid="login-submit" disabled={loading} className="btn-primary w-full">{loading ? "Signing in..." : "Sign in"}</button>

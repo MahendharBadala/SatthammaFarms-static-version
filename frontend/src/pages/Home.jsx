@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import axios from "axios";
 import Hero3D from "../components/Hero3D";
 import ProductCard from "../components/ProductCard";
+import { BannerSlider, PromoCards } from "../components/HomeBanners";
 import { motion } from "framer-motion";
 import { Leaf, HandHeart, SunHorizon, Truck, ArrowRight } from "@phosphor-icons/react";
 
@@ -16,6 +17,9 @@ export default function Home() {
 
   return (
     <>
+      {/* TOP BANNER SLIDER */}
+      <BannerSlider />
+
       {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="hero-blob bg-terracotta -top-32 -left-24 w-[360px] h-[360px]"></div>
@@ -69,6 +73,9 @@ export default function Home() {
           </motion.div>
         ))}
       </section>
+
+      {/* PROMO CARDS */}
+      <PromoCards />
 
       {/* CATEGORIES */}
       <section className="container mx-auto py-10">
