@@ -195,6 +195,14 @@ async def register(payload: RegisterInput, response: Response):
     doc["_id"] = res.inserted_id
     token = create_access_token(str(res.inserted_id), email, "customer")
     set_auth_cookie(response, token)
+    # Welcome email (mock or real depending on SENDGRID_API_KEY)
+    _send_email(email, "Welcome to Satthamma Farms 🌾",
+                f"<div style='font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#F9F6F0;border-radius:12px'>"
+                f"<div style='font-size:12px;letter-spacing:.2em;color:#C5684B'>SATTHAMMA FARMS</div>"
+                f"<h1 style='font-family:Georgia,serif;color:#2C4C3B'>Welcome, {doc['name']}!</h1>"
+                f"<p>Thank you for joining our family. Every grain we grow is chemical-free, hand-harvested, and packed with pride from Medipally, Telangana.</p>"
+                f"<p style='font-family:Georgia,serif;font-style:italic;color:#C5684B'>\"prathiokkari intaa, nanyamaina panta\"</p></div>",
+                plain=f"Welcome to Satthamma Farms, {doc['name']}!")
     return {"user": user_to_public(doc), "token": token}
 
 @api.post("/auth/login")
@@ -409,6 +417,12 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
     }
     res = await db.orders.insert_one(doc)
     doc["_id"] = res.inserted_id
+    order_view = {"id": str(res.inserted_id), "total": total, "items": items_full, "address": payload.address, "phone": payload.phone}
+    # Confirmation emails — buyer + admin
+    if user.get("email"):
+        _send_email(user["email"], f"Order confirmed · ₹{total} · Satthamma Farms", _order_html(order_view, "buyer"))
+    admin_email = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "satthammafarms@gmail.com")
+    _send_email(admin_email, f"[Satthamma] New order ₹{total} from {user.get('email') or user.get('phone','')}", _order_html(order_view, "admin"))
     return {"id": str(res.inserted_id), "total": total, "status": "pending"}
 
 @api.get("/orders/mine")
@@ -494,7 +508,58 @@ async def admin_update_order_status(oid: str, payload: OrderStatusIn, _admin: di
     await db.orders.update_one({"_id": oidv}, {"$set": upd})
     return {"ok": True, "status": payload.status}
 
-# --- File & media storage (Emergent Object Storage) ---
+# --- Email (SendGrid — auto mock mode until SENDGRID_API_KEY is set) ---
+def _send_email(to_email: str, subject: str, html: str, plain: Optional[str] = None) -> dict:
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
+    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "satthammafarms@gmail.com")
+    from_name = os.environ.get("SENDGRID_FROM_NAME", "Satthamma Farms")
+    if not to_email:
+        return {"sent": False, "reason": "no_recipient"}
+    if not api_key:
+        # Mock mode — print full email to console
+        print(f"\n===== SATTHAMMA EMAIL (MOCK) =====\nTo: {to_email}\nFrom: {from_name} <{from_email}>\nSubject: {subject}\n---\n{plain or html[:400]}\n=================================\n", flush=True)
+        logger.info(f"[EMAIL MOCK] to={to_email} subject={subject!r}")
+        return {"sent": True, "mock": True}
+    payload = {
+        "personalizations": [{"to": [{"email": to_email}]}],
+        "from": {"email": from_email, "name": from_name},
+        "subject": subject,
+        "content": [
+            {"type": "text/plain", "value": plain or html},
+            {"type": "text/html", "value": html},
+        ],
+    }
+    try:
+        r = requests.post("https://api.sendgrid.com/v3/mail/send",
+                          json=payload,
+                          headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                          timeout=15)
+        if r.status_code >= 400:
+            logger.error(f"[EMAIL FAIL] {r.status_code}: {r.text[:200]}")
+            return {"sent": False, "status": r.status_code}
+        return {"sent": True}
+    except Exception as e:
+        logger.error(f"[EMAIL EXC] {e}")
+        return {"sent": False, "error": str(e)}
+
+def _order_html(order: dict, kind: str = "buyer") -> str:
+    lines = "".join(
+        f"<tr><td style='padding:6px 12px;border-bottom:1px solid #eee'>{i['name']} × {i['quantity']}</td>"
+        f"<td style='padding:6px 12px;border-bottom:1px solid #eee;text-align:right'>₹{i['line_total']}</td></tr>"
+        for i in order.get("items", [])
+    )
+    who = "New order received!" if kind == "admin" else "Thank you for your order!"
+    return f"""<div style='font-family:Manrope,sans-serif;max-width:560px;margin:0 auto;color:#2C2C2C'>
+<div style='background:#2C4C3B;color:#F9F6F0;padding:24px;border-radius:12px 12px 0 0'>
+<div style='font-size:12px;letter-spacing:.2em;color:#D4A373'>SATTHAMMA FARMS</div>
+<h1 style='font-family:Georgia,serif;margin:8px 0 0'>{who}</h1></div>
+<div style='background:#F9F6F0;padding:24px;border:1px solid #E5E0D8;border-top:0;border-radius:0 0 12px 12px'>
+<p>Order <b>{order['id'][-8:].upper()}</b> · Total <b style='color:#2C4C3B'>₹{order['total']}</b></p>
+<table style='width:100%;border-collapse:collapse;margin-top:12px'>{lines}</table>
+<p style='margin-top:16px;font-size:13px;color:#6B6A66'>Deliver to: {order.get('address','')}<br/>Phone: {order.get('phone','')}</p>
+<p style='margin-top:16px;font-size:13px;color:#6B6A66'>Track status any time in <a href='#'>My Orders</a>.</p>
+<p style='margin-top:24px;font-family:Georgia,serif;font-style:italic;color:#C5684B'>"prathiokkari intaa, nanyamaina panta"</p>
+</div></div>"""
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 APP_NAME = "satthamma-farms"
