@@ -5,6 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
 import { CheckCircle } from "@phosphor-icons/react";
+import { resolveMediaUrl } from "../components/MediaUploader";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -85,7 +86,7 @@ export default function Checkout() {
         <div className="mt-4 space-y-3">
           {items.map(i => (
             <div key={i.id} className="flex gap-3 text-sm">
-              <img src={i.image_url} alt="" className="w-14 h-14 rounded-lg object-cover" />
+              <img src={resolveMediaUrl(i.image_url)} alt="" className="w-14 h-14 rounded-lg object-cover" />
               <div className="flex-1">
                 <div className="text-ink font-serif text-base">{i.name}</div>
                 <div className="text-muted2 text-xs">₹{i.price} × {i.quantity}</div>

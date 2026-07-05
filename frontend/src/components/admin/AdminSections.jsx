@@ -1,18 +1,19 @@
 import React from "react";
 import { PencilSimple, Trash, Plus } from "@phosphor-icons/react";
+import MediaUploader, { resolveMediaUrl } from "../MediaUploader";
 
 export function ProductForm({ form, setForm, editing, onSave, onCancel }) {
-  const fields = [
+  const textFields = [
     ["name", "Name", "text"], ["price", "Price (₹)", "number"], ["unit", "Unit (kg, 500g...)", "text"],
-    ["image_url", "Image URL", "url"], ["video_url", "Video URL (optional)", "url"], ["stock", "Stock", "number"],
+    ["stock", "Stock", "number"],
   ];
   return (
-    <form onSubmit={onSave} className="card-earth p-6 h-fit sticky top-24 space-y-3" data-testid="product-form">
+    <form onSubmit={onSave} className="card-earth p-6 h-fit sticky top-24 space-y-3 max-h-[calc(100vh-8rem)] overflow-y-auto" data-testid="product-form">
       <h3 className="font-serif text-2xl text-ink">{editing ? "Edit product" : "Add product"}</h3>
-      {fields.map(([k, l, t]) => (
+      {textFields.map(([k, l, t]) => (
         <div key={k}>
           <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">{l}</label>
-          <input data-testid={`product-form-${k}`} type={t} required={k !== "video_url"} value={form[k]}
+          <input data-testid={`product-form-${k}`} type={t} required value={form[k]}
             onChange={e => setForm({ ...form, [k]: e.target.value })}
             className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
         </div>
@@ -31,7 +32,33 @@ export function ProductForm({ form, setForm, editing, onSave, onCancel }) {
           onChange={e => setForm({ ...form, description: e.target.value })}
           className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
       </div>
-      <label className="inline-flex items-center gap-2 text-sm">
+
+      <MediaUploader
+        kind="image"
+        label="Main product image"
+        value={form.image_url}
+        onChange={(url) => setForm({ ...form, image_url: url })}
+        testId="upload-main-image"
+        compact
+      />
+      <MediaUploader
+        kind="video"
+        label="Product video (optional)"
+        value={form.video_url}
+        onChange={(url) => setForm({ ...form, video_url: url })}
+        testId="upload-video"
+        compact
+      />
+      <MediaUploader
+        kind="image"
+        label="Gallery — extra photos"
+        values={form.gallery || []}
+        onChangeMulti={(urls) => setForm({ ...form, gallery: urls })}
+        testId="upload-gallery"
+        compact
+      />
+
+      <label className="inline-flex items-center gap-2 text-sm pt-2">
         <input data-testid="product-form-featured" type="checkbox" checked={form.featured}
           onChange={e => setForm({ ...form, featured: e.target.checked })} /> Featured on home page
       </label>
@@ -50,11 +77,11 @@ export function ProductList({ products, onEdit, onDelete }) {
     <div className="space-y-3" data-testid="admin-product-list">
       {products.map(p => (
         <div key={p.id} className="card-earth p-4 flex gap-4 items-center">
-          <img src={p.image_url} alt={p.name} className="w-20 h-20 object-cover rounded-lg" />
+          <img src={resolveMediaUrl(p.image_url)} alt={p.name} className="w-20 h-20 object-cover rounded-lg" />
           <div className="flex-1">
             <div className="text-[10px] uppercase tracking-widest text-terracotta">{p.category}</div>
             <h4 className="font-serif text-xl text-ink">{p.name}</h4>
-            <div className="text-sm text-muted2">₹{p.price} / {p.unit} · stock {p.stock} {p.featured && "· ★ featured"}</div>
+            <div className="text-sm text-muted2">₹{p.price} / {p.unit} · stock {p.stock} {p.featured && "· ★ featured"} {p.gallery?.length ? `· ${p.gallery.length} extra photo${p.gallery.length > 1 ? "s" : ""}` : ""}</div>
           </div>
           <button data-testid={`admin-edit-${p.id}`} onClick={() => onEdit(p)} className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
           <button data-testid={`admin-delete-${p.id}`} onClick={() => onDelete(p.id)} className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta"><Trash size={16} /></button>
@@ -99,7 +126,7 @@ export function UsersTable({ users }) {
           {users.map(u => (
             <tr key={u.id} className="border-t border-edge">
               <td className="p-3 font-serif text-ink">{u.name}</td>
-              <td className="p-3">{u.email}</td>
+              <td className="p-3">{u.email || "—"}</td>
               <td className="p-3">{u.phone || "—"}</td>
               <td className="p-3"><span className={`chip ${u.role === "admin" ? "!bg-forest/10 !text-forest" : ""}`}>{u.role}</span></td>
               <td className="p-3 text-muted2">{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>

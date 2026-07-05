@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { Trash, Plus, Minus, ShoppingBagOpen } from "@phosphor-icons/react";
+import { resolveMediaUrl } from "../components/MediaUploader";
 
 export default function Cart() {
   const { items, update, remove, total, clear } = useCart();
@@ -25,7 +26,7 @@ export default function Cart() {
         <div className="lg:col-span-2 space-y-4">
           {items.map(item => (
             <div key={item.id} className="card-earth p-4 flex gap-4" data-testid={`cart-item-${item.id}`}>
-              <img src={item.image_url} alt={item.name} className="w-24 h-24 object-cover rounded-xl" />
+              <img src={resolveMediaUrl(item.image_url)} alt={item.name} className="w-24 h-24 object-cover rounded-xl" />
               <div className="flex-1 flex flex-col">
                 <div className="flex justify-between">
                   <h3 className="font-serif text-xl text-ink">{item.name}</h3>

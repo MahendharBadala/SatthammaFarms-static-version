@@ -4,17 +4,26 @@ import axios from "axios";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Minus, Leaf, ShieldCheck, HandHeart } from "@phosphor-icons/react";
+import { resolveMediaUrl } from "../components/MediaUploader";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function ProductDetail() {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
+  const [activeMedia, setActiveMedia] = useState("");
   const [qty, setQty] = useState(1);
   const { add } = useCart();
 
-  useEffect(() => { axios.get(`${API}/products/${id}`).then(r => setProduct(r.data)); }, [id]);
+  useEffect(() => {
+    axios.get(`${API}/products/${id}`).then(r => {
+      setProduct(r.data);
+      setActiveMedia(r.data.image_url);
+    });
+  }, [id]);
   if (!product) return <div className="container mx-auto py-20 text-center text-muted2">Loading...</div>;
+
+  const thumbs = [product.image_url, ...(product.gallery || [])].filter(Boolean);
 
   return (
     <div className="container mx-auto py-10">
@@ -22,11 +31,21 @@ export default function ProductDetail() {
       <div className="grid lg:grid-cols-2 gap-10">
         <div>
           <div className="card-earth overflow-hidden aspect-[4/3]">
-            <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+            <img src={resolveMediaUrl(activeMedia || product.image_url)} alt={product.name} className="w-full h-full object-cover" />
           </div>
+          {thumbs.length > 1 && (
+            <div className="mt-3 grid grid-cols-5 gap-2" data-testid="product-gallery">
+              {thumbs.map((u, i) => (
+                <button key={`${u}-${i}`} type="button" onClick={() => setActiveMedia(u)} data-testid={`gallery-thumb-${i}`}
+                  className={`aspect-square rounded-lg overflow-hidden border-2 transition-colors ${activeMedia === u ? "border-forest" : "border-transparent hover:border-edge"}`}>
+                  <img src={resolveMediaUrl(u)} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
           {product.video_url && (
             <div className="mt-4 card-earth overflow-hidden aspect-video">
-              <video controls src={product.video_url} className="w-full h-full object-cover" data-testid="product-video" />
+              <video controls src={resolveMediaUrl(product.video_url)} className="w-full h-full object-cover" data-testid="product-video" />
             </div>
           )}
         </div>

@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
@@ -15,6 +15,8 @@ import os
 import logging
 import bcrypt
 import jwt as pyjwt
+import uuid
+import requests
 
 # ---------------- Mongo ----------------
 mongo_url = os.environ['MONGO_URL']
@@ -75,6 +77,7 @@ class ProductIn(BaseModel):
     description: str = ""
     image_url: str = ""
     video_url: Optional[str] = None
+    gallery: List[str] = []
     stock: int = 100
     featured: bool = False
 
@@ -290,6 +293,7 @@ def product_to_out(doc: dict) -> dict:
         "description": doc.get("description", ""),
         "image_url": doc.get("image_url", ""),
         "video_url": doc.get("video_url", ""),
+        "gallery": list(doc.get("gallery", []) or []),
         "stock": int(doc.get("stock", 0)),
         "featured": bool(doc.get("featured", False)),
         "created_at": doc.get("created_at", ""),
@@ -407,9 +411,99 @@ async def all_users(_admin: dict = Depends(get_admin_user)):
     docs = await db.users.find({}).sort("created_at", -1).to_list(1000)
     return [user_to_public(d) for d in docs]
 
+# --- File & media storage (Emergent Object Storage) ---
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+APP_NAME = "satthamma-farms"
+_storage_key: Optional[str] = None
+
+def _init_storage() -> Optional[str]:
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    if not EMERGENT_KEY:
+        return None
+    try:
+        r = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        r.raise_for_status()
+        _storage_key = r.json()["storage_key"]
+        return _storage_key
+    except Exception as exc:
+        logging.getLogger(__name__).error(f"Storage init failed: {exc}")
+        return None
+
+def _put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = _init_storage()
+    if not key:
+        raise HTTPException(status_code=503, detail="Storage not configured")
+    r = requests.put(f"{STORAGE_URL}/objects/{path}",
+                     headers={"X-Storage-Key": key, "Content-Type": content_type},
+                     data=data, timeout=120)
+    if r.status_code == 403:
+        # key expired: refresh once
+        globals()["_storage_key"] = None
+        key = _init_storage()
+        r = requests.put(f"{STORAGE_URL}/objects/{path}",
+                         headers={"X-Storage-Key": key, "Content-Type": content_type},
+                         data=data, timeout=120)
+    r.raise_for_status()
+    return r.json()
+
+def _get_object(path: str) -> tuple[bytes, str]:
+    key = _init_storage()
+    if not key:
+        raise HTTPException(status_code=503, detail="Storage not configured")
+    r = requests.get(f"{STORAGE_URL}/objects/{path}",
+                     headers={"X-Storage-Key": key}, timeout=60)
+    r.raise_for_status()
+    return r.content, r.headers.get("Content-Type", "application/octet-stream")
+
+_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"}
+_VIDEO_TYPES = {"video/mp4", "video/webm", "video/quicktime", "video/x-matroska"}
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_VIDEO_BYTES = 60 * 1024 * 1024
+
+@api.post("/uploads")
+async def upload_file(file: UploadFile = File(...), admin: dict = Depends(get_admin_user)):
+    ct = (file.content_type or "").lower()
+    is_image = ct in _IMAGE_TYPES
+    is_video = ct in _VIDEO_TYPES
+    if not (is_image or is_video):
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ct}")
+    data = await file.read()
+    limit = MAX_IMAGE_BYTES if is_image else MAX_VIDEO_BYTES
+    if len(data) > limit:
+        raise HTTPException(status_code=413, detail=f"File too large. Max {limit // (1024*1024)} MB")
+    ext = (file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else ("jpg" if is_image else "mp4")).lower()
+    path = f"{APP_NAME}/uploads/{admin['id']}/{uuid.uuid4()}.{ext}"
+    result = _put_object(path, data, ct)
+    file_id = str(uuid.uuid4())
+    doc = {
+        "file_id": file_id,
+        "storage_path": result["path"],
+        "original_filename": file.filename or f"file.{ext}",
+        "content_type": ct,
+        "size": result.get("size", len(data)),
+        "kind": "image" if is_image else "video",
+        "uploaded_by": admin["id"],
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.files.insert_one(doc)
+    return {"file_id": file_id, "url": f"/api/files/{file_id}", "kind": doc["kind"], "content_type": ct, "size": doc["size"]}
+
+@api.get("/files/{file_id}")
+async def serve_file(file_id: str):
+    rec = await db.files.find_one({"file_id": file_id, "is_deleted": False})
+    if not rec:
+        raise HTTPException(status_code=404, detail="File not found")
+    data, ct = _get_object(rec["storage_path"])
+    return Response(content=data, media_type=rec.get("content_type") or ct, headers={"Cache-Control": "public, max-age=86400"})
+
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def on_startup():
+    _init_storage()
     await db.users.create_index("email", unique=True, partialFilterExpression={"email": {"$type": "string", "$gt": ""}})
     await db.users.create_index("phone")
     # OTP TTL cleanup: docs auto-purged 15 min after creation

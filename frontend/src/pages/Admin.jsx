@@ -7,7 +7,7 @@ import { Users, ShoppingBag, Package } from "@phosphor-icons/react";
 import { ProductForm, ProductList, OrdersTable, UsersTable } from "../components/admin/AdminSections";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const empty = { name: "", category: "grains", price: 0, unit: "kg", description: "", image_url: "", video_url: "", stock: 100, featured: false };
+const empty = { name: "", category: "grains", price: 0, unit: "kg", description: "", image_url: "", video_url: "", gallery: [], stock: 100, featured: false };
 
 export default function Admin() {
   const { user, loading } = useAuth();

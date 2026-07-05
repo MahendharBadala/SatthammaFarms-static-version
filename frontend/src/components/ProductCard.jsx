@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
 import { Plus, PlayCircle } from "@phosphor-icons/react";
+import { resolveMediaUrl } from "./MediaUploader";
 
 export default function ProductCard({ product }) {
   const { add } = useCart();
@@ -12,7 +13,7 @@ export default function ProductCard({ product }) {
     <div data-testid={`product-card-${testId}`} className="card-earth overflow-hidden group flex flex-col">
       <Link to={`/products/${product.id}`} className="block relative aspect-[4/3] overflow-hidden bg-cream2">
         <img
-          src={product.image_url || "https://images.unsplash.com/photo-1581600140682-d4e68c8cde32?auto=format&fit=crop&w=1200&q=80"}
+          src={resolveMediaUrl(product.image_url) || "https://images.unsplash.com/photo-1581600140682-d4e68c8cde32?auto=format&fit=crop&w=1200&q=80"}
           alt={product.name}
           loading="lazy"
           className="w-full h-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-105"
