@@ -388,11 +388,15 @@ async def list_categories():
 async def create_order(payload: OrderIn, user: dict = Depends(get_current_user)):
     total = 0.0
     items_full = []
+    # Bulk-fetch all products in one query to avoid N+1
+    try:
+        oids = [ObjectId(it.product_id) for it in payload.items]
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid product id") from exc
+    products = await db.products.find({"_id": {"$in": oids}}).to_list(len(oids))
+    p_map = {str(p["_id"]): p for p in products}
     for it in payload.items:
-        try:
-            p = await db.products.find_one({"_id": ObjectId(it.product_id)})
-        except Exception:
-            continue
+        p = p_map.get(it.product_id)
         if not p:
             continue
         line = float(p["price"]) * int(it.quantity)
