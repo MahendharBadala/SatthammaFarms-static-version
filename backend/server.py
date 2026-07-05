@@ -495,6 +495,14 @@ async def confirm_payment(oid: str, payload: OrderConfirmIn, user: dict = Depend
 
 _ALLOWED_STATUSES = {"pending", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"}
 
+_STATUS_COPY = {
+    "paid": ("Payment confirmed · Satthamma Farms", "We've verified your payment. Your harvest is being prepared."),
+    "packed": ("Your order is packed 🌾", "Your order has been packed with care and is ready for dispatch."),
+    "shipped": ("On its way! 🚚", "Your order has left the farm and is on its way to you."),
+    "delivered": ("Delivered — thank you!", "Your order has been delivered. We hope every grain brings joy to your kitchen."),
+    "cancelled": ("Order cancelled", "Your order has been cancelled. If this was unexpected, please reply to this email."),
+}
+
 @api.put("/admin/orders/{oid}/status")
 async def admin_update_order_status(oid: str, payload: OrderStatusIn, _admin: dict = Depends(get_admin_user)):
     if payload.status not in _ALLOWED_STATUSES:
@@ -506,6 +514,19 @@ async def admin_update_order_status(oid: str, payload: OrderStatusIn, _admin: di
     now = datetime.now(timezone.utc).isoformat()
     upd = {"status": payload.status, f"status_{payload.status}_at": now}
     await db.orders.update_one({"_id": oidv}, {"$set": upd})
+    # Notify buyer by email when the status has customer-facing copy
+    if payload.status in _STATUS_COPY:
+        order = await db.orders.find_one({"_id": oidv})
+        buyer_email = (order or {}).get("user_email", "")
+        if buyer_email:
+            subj, msg = _STATUS_COPY[payload.status]
+            html = (f"<div style='font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#F9F6F0;border-radius:12px'>"
+                    f"<div style='font-size:12px;letter-spacing:.2em;color:#C5684B'>SATTHAMMA FARMS</div>"
+                    f"<h1 style='font-family:Georgia,serif;color:#2C4C3B'>{subj}</h1>"
+                    f"<p>Order <b>{str(oidv)[-8:].upper()}</b> · Total <b style='color:#2C4C3B'>₹{order.get('total',0)}</b></p>"
+                    f"<p>{msg}</p>"
+                    f"<p style='font-family:Georgia,serif;font-style:italic;color:#C5684B'>\"prathiokkari intaa, nanyamaina panta\"</p></div>")
+            _send_email(buyer_email, subj, html, plain=msg)
     return {"ok": True, "status": payload.status}
 
 # --- Email (SendGrid — auto mock mode until SENDGRID_API_KEY is set) ---
