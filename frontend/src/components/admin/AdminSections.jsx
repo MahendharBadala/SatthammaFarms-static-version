@@ -91,27 +91,79 @@ export function ProductList({ products, onEdit, onDelete }) {
   );
 }
 
-export function OrdersTable({ orders }) {
+export function OrdersTable({ orders, onUpdateStatus }) {
   if (orders.length === 0) return <div className="text-muted2 text-center py-16" data-testid="admin-orders">No orders yet.</div>;
+  const STATUSES = ["pending", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"];
   return (
     <div className="space-y-3" data-testid="admin-orders">
       {orders.map(o => (
         <div key={o.id} className="card-earth p-5">
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start flex-wrap gap-3">
             <div>
-              <div className="text-xs text-muted2">{new Date(o.created_at).toLocaleString()}</div>
-              <div className="font-serif text-xl text-ink">{o.user_email}</div>
+              <div className="text-xs text-muted2">{new Date(o.created_at).toLocaleString()} · Order {o.id.slice(-8).toUpperCase()}</div>
+              <div className="font-serif text-xl text-ink">{o.user_email || o.phone}</div>
               <div className="text-sm text-muted2">{o.address} · {o.phone}</div>
+              {o.payment_utr && <div className="text-sm text-muted2">UTR: <span className="font-mono">{o.payment_utr}</span></div>}
             </div>
             <div className="text-right">
               <div className="font-serif text-2xl text-forest">₹{o.total}</div>
-              <div className="chip">{o.status}</div>
+              <select
+                data-testid={`admin-order-status-${o.id}`}
+                value={o.status || "pending"}
+                onChange={e => onUpdateStatus(o.id, e.target.value)}
+                className="mt-1 px-3 py-1 rounded-full border border-edge bg-white text-sm focus:outline-none focus:border-forest"
+              >
+                {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+              </select>
             </div>
           </div>
           <div className="mt-3 text-sm text-muted2">{o.items.map(i => `${i.name} × ${i.quantity}`).join(" · ")}</div>
         </div>
       ))}
     </div>
+  );
+}
+
+export function PaymentSettingsPanel({ settings, onSave }) {
+  const [form, setForm] = React.useState(settings || {});
+  React.useEffect(() => { setForm(settings || {}); }, [settings]);
+  if (!settings) return null;
+  const update = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="card-earth p-6 max-w-2xl space-y-4" data-testid="payment-settings-form">
+      <h3 className="font-serif text-2xl text-ink">Payment settings</h3>
+      <p className="text-sm text-muted2">These control the UPI checkout customers see. Every change is live instantly.</p>
+
+      <div>
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Provider</label>
+        <select data-testid="settings-provider" value={form.provider} onChange={update("provider")} className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
+          <option value="upi_manual">UPI Manual (customer pays, admin verifies)</option>
+          <option value="razorpay">Razorpay (auto — needs API keys below)</option>
+          <option value="disabled">Disabled (Cash on delivery only)</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Receiving UPI ID (VPA)</label>
+        <input data-testid="settings-vpa" value={form.upi_vpa || ""} onChange={update("upi_vpa")} className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Payee name (shown in UPI apps)</label>
+        <input data-testid="settings-payee" value={form.payee_name || ""} onChange={update("payee_name")} className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Instructions to customer</label>
+        <textarea data-testid="settings-instructions" rows="2" value={form.instructions || ""} onChange={update("instructions")} className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+      </div>
+      <div className="border-t border-edge pt-4">
+        <div className="text-xs font-semibold text-terracotta uppercase tracking-widest mb-2">Razorpay (optional — for automated confirmation)</div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <input data-testid="settings-rzp-key" placeholder="Key ID (rzp_live_xxx)" value={form.razorpay_key_id || ""} onChange={update("razorpay_key_id")} className="px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+          <input data-testid="settings-rzp-secret" placeholder="Key Secret" type="password" value={form.razorpay_key_secret || ""} onChange={update("razorpay_key_secret")} className="px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+        </div>
+        <p className="text-xs text-muted2 mt-2">When you paste real Razorpay keys and switch provider to "Razorpay", the checkout will automatically use the Razorpay-hosted flow with webhook confirmation. No code change needed.</p>
+      </div>
+      <button data-testid="settings-save" className="btn-primary">Save settings</button>
+    </form>
   );
 }
 

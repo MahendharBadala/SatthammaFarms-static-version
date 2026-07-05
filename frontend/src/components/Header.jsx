@@ -38,6 +38,9 @@ export default function Header() {
               <span data-testid="cart-count-badge" className="absolute -top-1 -right-1 bg-terracotta text-white text-[10px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center">{count}</span>
             )}
           </Link>
+          {user && user.role !== "admin" && (
+            <Link to="/orders" data-testid="nav-my-orders" className="text-sm text-muted2 hover:text-forest hidden sm:inline">My orders</Link>
+          )}
           {user?.role === "admin" && (
             <button data-testid="nav-admin-panel" onClick={() => nav("/admin")} className="btn-outline hidden sm:inline-flex items-center gap-2 !py-2 !px-3 text-xs">
               <ShieldCheck size={16} weight="duotone" /> Admin

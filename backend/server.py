@@ -95,6 +95,21 @@ class OrderIn(BaseModel):
     phone: str
     notes: Optional[str] = ""
 
+class PaymentSettingsIn(BaseModel):
+    provider: str = "upi_manual"      # upi_manual | razorpay | disabled
+    upi_vpa: str = "7981282044@ybl"
+    payee_name: str = "SATTHAMMA FARMS"
+    razorpay_key_id: Optional[str] = ""
+    razorpay_key_secret: Optional[str] = ""
+    instructions: str = "Pay via any UPI app, then click 'I have paid' and share the UTR reference."
+
+class OrderConfirmIn(BaseModel):
+    utr: str = ""
+    method: str = "upi"
+
+class OrderStatusIn(BaseModel):
+    status: str  # pending | payment_pending_verification | paid | packed | shipped | delivered | cancelled
+
 # ---------------- App ----------------
 app = FastAPI(title="Satthamma Farms API")
 api = APIRouter(prefix="/api")
@@ -410,6 +425,74 @@ async def all_orders(_admin: dict = Depends(get_admin_user)):
 async def all_users(_admin: dict = Depends(get_admin_user)):
     docs = await db.users.find({}).sort("created_at", -1).to_list(1000)
     return [user_to_public(d) for d in docs]
+
+# --- Payment settings (public read, admin write) ---
+DEFAULT_PAYMENT_SETTINGS = {
+    "provider": "upi_manual",
+    "upi_vpa": "7981282044@ybl",
+    "payee_name": "SATTHAMMA FARMS",
+    "razorpay_key_id": "",
+    "razorpay_key_secret": "",
+    "instructions": "Pay via any UPI app, then click 'I have paid' and share the UTR reference.",
+}
+
+async def _get_settings() -> dict:
+    doc = await db.settings.find_one({"_id": "payment"})
+    if not doc:
+        await db.settings.insert_one({"_id": "payment", **DEFAULT_PAYMENT_SETTINGS})
+        return dict(DEFAULT_PAYMENT_SETTINGS)
+    return {k: doc.get(k, v) for k, v in DEFAULT_PAYMENT_SETTINGS.items()}
+
+@api.get("/payments/settings")
+async def get_public_payment_settings():
+    s = await _get_settings()
+    # Never expose secret to non-admin callers
+    return {"provider": s["provider"], "upi_vpa": s["upi_vpa"], "payee_name": s["payee_name"], "instructions": s["instructions"], "razorpay_key_id": s.get("razorpay_key_id", "")}
+
+@api.get("/admin/payments/settings")
+async def get_full_payment_settings(_admin: dict = Depends(get_admin_user)):
+    return await _get_settings()
+
+@api.put("/admin/payments/settings")
+async def update_payment_settings(payload: PaymentSettingsIn, _admin: dict = Depends(get_admin_user)):
+    data = payload.model_dump()
+    await db.settings.update_one({"_id": "payment"}, {"$set": data}, upsert=True)
+    return {"ok": True, **data}
+
+# --- Order confirmation + status flow ---
+@api.post("/orders/{oid}/confirm-payment")
+async def confirm_payment(oid: str, payload: OrderConfirmIn, user: dict = Depends(get_current_user)):
+    try:
+        order = await db.orders.find_one({"_id": ObjectId(oid)})
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid order id") from exc
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order["user_id"] != user["id"] and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not your order")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.orders.update_one({"_id": order["_id"]}, {"$set": {
+        "status": "payment_pending_verification",
+        "payment_method": payload.method or "upi",
+        "payment_utr": (payload.utr or "").strip(),
+        "payment_claimed_at": now,
+    }})
+    return {"ok": True, "status": "payment_pending_verification"}
+
+_ALLOWED_STATUSES = {"pending", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"}
+
+@api.put("/admin/orders/{oid}/status")
+async def admin_update_order_status(oid: str, payload: OrderStatusIn, _admin: dict = Depends(get_admin_user)):
+    if payload.status not in _ALLOWED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {sorted(_ALLOWED_STATUSES)}")
+    try:
+        oidv = ObjectId(oid)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid order id") from exc
+    now = datetime.now(timezone.utc).isoformat()
+    upd = {"status": payload.status, f"status_{payload.status}_at": now}
+    await db.orders.update_one({"_id": oidv}, {"$set": upd})
+    return {"ok": True, "status": payload.status}
 
 # --- File & media storage (Emergent Object Storage) ---
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"

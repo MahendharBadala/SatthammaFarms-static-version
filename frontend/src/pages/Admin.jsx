@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Users, ShoppingBag, Package } from "@phosphor-icons/react";
-import { ProductForm, ProductList, OrdersTable, UsersTable } from "../components/admin/AdminSections";
+import { ProductForm, ProductList, OrdersTable, UsersTable, PaymentSettingsPanel } from "../components/admin/AdminSections";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const empty = { name: "", category: "grains", price: 0, unit: "kg", description: "", image_url: "", video_url: "", gallery: [], stock: 100, featured: false };
@@ -15,16 +15,18 @@ export default function Admin() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [users, setUsers] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
 
   const load = useCallback(async () => {
-    const [p, o, u] = await Promise.all([
+    const [p, o, u, s] = await Promise.all([
       axios.get(`${API}/products`),
       axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
       axios.get(`${API}/admin/users`).catch(() => ({ data: [] })),
+      axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
     ]);
-    setProducts(p.data); setOrders(o.data); setUsers(u.data);
+    setProducts(p.data); setOrders(o.data); setUsers(u.data); setSettings(s.data);
   }, []);
 
   useEffect(() => { if (user?.role === "admin") load(); }, [user, load]);
@@ -84,7 +86,7 @@ export default function Admin() {
       </div>
 
       <div className="flex gap-2 border-b border-edge mb-6">
-        {[{ k: "products", label: "Products" }, { k: "orders", label: "Orders" }, { k: "users", label: "Users" }].map(t => (
+        {[{ k: "products", label: "Products" }, { k: "orders", label: "Orders" }, { k: "users", label: "Users" }, { k: "payments", label: "Payments" }].map(t => (
           <button key={t.k} data-testid={`admin-tab-${t.k}`} onClick={() => setTab(t.k)}
             className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${tab === t.k ? "border-forest text-forest font-semibold" : "border-transparent text-muted2 hover:text-forest"}`}>{t.label}</button>
         ))}
@@ -96,8 +98,21 @@ export default function Admin() {
           <ProductList products={products} onEdit={startEdit} onDelete={del} />
         </div>
       )}
-      {tab === "orders" && <OrdersTable orders={orders} />}
+      {tab === "orders" && <OrdersTable orders={orders} onUpdateStatus={async (id, status) => {
+        try {
+          await axios.put(`${API}/admin/orders/${id}/status`, { status });
+          toast.success(`Order marked ${status.replace(/_/g, " ")}`);
+          load();
+        } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+      }} />}
       {tab === "users" && <UsersTable users={users} />}
+      {tab === "payments" && <PaymentSettingsPanel settings={settings} onSave={async (payload) => {
+        try {
+          await axios.put(`${API}/admin/payments/settings`, payload);
+          toast.success("Payment settings updated");
+          load();
+        } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+      }} />}
     </div>
   );
 }

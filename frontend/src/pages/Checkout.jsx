@@ -1,13 +1,29 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { QRCodeCanvas } from "qrcode.react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "sonner";
-import { CheckCircle } from "@phosphor-icons/react";
+import { CheckCircle, DeviceMobile, Copy } from "@phosphor-icons/react";
 import { resolveMediaUrl } from "../components/MediaUploader";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const UPI_APPS = [
+  { name: "Google Pay", scheme: "tez", color: "#4285F4" },
+  { name: "PhonePe", scheme: "phonepe", color: "#5f259f" },
+  { name: "Paytm", scheme: "paytmmp", color: "#00baf2" },
+  { name: "BHIM", scheme: "bhim", color: "#00A950" },
+  { name: "Amazon Pay", scheme: "amazonpay", color: "#FF9900" },
+];
+
+const buildUpiUri = ({ vpa, name, amount, ref, note }) => {
+  const params = new URLSearchParams({
+    pa: vpa, pn: name, am: Number(amount).toFixed(2), cu: "INR", tr: ref, tn: note,
+  });
+  return `upi://pay?${params.toString()}`;
+};
 
 export default function Checkout() {
   const { items, total, clear } = useCart();
@@ -16,8 +32,13 @@ export default function Checkout() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState(user?.phone || "");
   const [notes, setNotes] = useState("");
-  const [placed, setPlaced] = useState(null);
+  const [step, setStep] = useState("form"); // form | pay | done
+  const [order, setOrder] = useState(null);
+  const [utr, setUtr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState(null);
+
+  useEffect(() => { axios.get(`${API}/payments/settings`).then(r => setSettings(r.data)); }, []);
 
   if (!user) return (
     <div className="container mx-auto py-20 text-center">
@@ -26,7 +47,7 @@ export default function Checkout() {
     </div>
   );
 
-  if (items.length === 0 && !placed) return (
+  if (items.length === 0 && step === "form") return (
     <div className="container mx-auto py-20 text-center">
       <h1 className="font-serif text-4xl text-ink">Your cart is empty</h1>
       <Link to="/products" className="btn-primary inline-block mt-6">Browse products</Link>
@@ -34,30 +55,103 @@ export default function Checkout() {
   );
 
   const place = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault(); setLoading(true);
     try {
       const { data } = await axios.post(`${API}/orders`, {
         items: items.map(i => ({ product_id: i.id, quantity: i.quantity })),
         address, phone, notes,
       });
-      setPlaced(data);
+      setOrder({ ...data, address, phone });
       clear();
-      toast.success("Order placed! We'll contact you shortly.");
-    } catch (e) { toast.error(e?.response?.data?.detail || "Order failed"); }
+      setStep("pay");
+    } catch (e2) { toast.error(e2?.response?.data?.detail || "Order failed"); }
     finally { setLoading(false); }
   };
 
-  if (placed) return (
+  const confirmPaid = async () => {
+    if (!order) return;
+    setLoading(true);
+    try {
+      await axios.post(`${API}/orders/${order.id}/confirm-payment`, { utr: utr.trim(), method: "upi" });
+      toast.success("Thanks! Our team will verify your payment shortly.");
+      setStep("done");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not record payment"); }
+    finally { setLoading(false); }
+  };
+
+  const upiUri = order && settings ? buildUpiUri({
+    vpa: settings.upi_vpa, name: settings.payee_name, amount: order.total,
+    ref: `SF${order.id.slice(-10).toUpperCase()}`, note: `Satthamma Farms order ${order.id.slice(-6)}`,
+  }) : "";
+
+  const copyVpa = () => {
+    if (settings?.upi_vpa) {
+      navigator.clipboard.writeText(settings.upi_vpa);
+      toast.success("UPI ID copied");
+    }
+  };
+
+  if (step === "done") return (
     <div className="container mx-auto py-20 max-w-lg text-center">
       <CheckCircle size={72} weight="duotone" className="text-forest mx-auto" />
-      <h1 className="font-serif text-4xl text-ink mt-4">Order placed!</h1>
-      <p className="text-muted2 mt-2">Order ID: <span className="font-mono text-ink" data-testid="order-id">{placed.id}</span></p>
-      <p className="text-muted2 mt-1">Total: <span className="font-serif text-forest font-semibold">₹{placed.total}</span></p>
-      <p className="mt-6 text-sm text-muted2">Online payment coming in Phase 2. For now, our team will WhatsApp you shortly on the number you provided to confirm delivery & payment (COD / UPI accepted).</p>
+      <h1 className="font-serif text-4xl text-ink mt-4">Payment recorded!</h1>
+      <p className="text-muted2 mt-2">Order ID: <span className="font-mono text-ink" data-testid="order-id">{order.id.slice(-8).toUpperCase()}</span></p>
+      <p className="text-muted2 mt-1">Amount: <span className="font-serif text-forest font-semibold">₹{order.total}</span></p>
+      {utr && <p className="text-muted2 mt-1">UTR: <span className="font-mono text-ink">{utr}</span></p>}
+      <p className="mt-6 text-sm text-muted2">Our team will verify your payment via bank statement (usually within a few hours) and start preparing your harvest for shipping. You can track status in <Link to="/orders" className="text-forest font-semibold">My Orders</Link>.</p>
       <div className="mt-8 flex gap-3 justify-center">
-        <button onClick={() => nav("/products")} className="btn-outline">Continue shopping</button>
-        <button onClick={() => nav("/")} className="btn-primary">Back to home</button>
+        <button onClick={() => nav("/orders")} className="btn-outline">My orders</button>
+        <button onClick={() => nav("/products")} className="btn-primary">Continue shopping</button>
+      </div>
+    </div>
+  );
+
+  if (step === "pay" && order && settings) return (
+    <div className="container mx-auto py-12 max-w-2xl">
+      <div className="card-earth p-8" data-testid="upi-payment-panel">
+        <div className="chip">Pay with UPI</div>
+        <h1 className="font-serif text-4xl text-ink mt-2">Complete your payment</h1>
+        <p className="text-muted2 mt-2">Order <span className="font-mono text-ink">{order.id.slice(-8).toUpperCase()}</span> · Amount <span className="font-serif text-forest font-semibold">₹{order.total}</span></p>
+
+        <div className="grid md:grid-cols-[220px,1fr] gap-6 mt-6">
+          <div className="p-4 bg-white border border-edge rounded-xl text-center">
+            <QRCodeCanvas value={upiUri} size={180} level="M" data-testid="upi-qr" />
+            <p className="text-xs text-muted2 mt-3">Scan with any UPI app</p>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm text-muted2">On mobile? Tap an app to pay directly:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <a href={upiUri} data-testid="upi-open-any" className="btn-primary inline-flex items-center justify-center gap-2 col-span-2 !py-3">
+                <DeviceMobile size={18} weight="duotone" /> Open UPI app
+              </a>
+              {UPI_APPS.map(app => (
+                <a key={app.name} href={upiUri} data-testid={`upi-app-${app.scheme}`}
+                  className="text-sm border border-edge rounded-full px-3 py-2 hover:bg-cream2 transition-colors text-center font-semibold"
+                  style={{ color: app.color }}>
+                  {app.name}
+                </a>
+              ))}
+            </div>
+            <div className="mt-3 p-3 bg-cream2 rounded-lg text-sm">
+              <div className="text-xs uppercase tracking-widest text-muted2">UPI ID</div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-ink" data-testid="upi-vpa">{settings.upi_vpa}</span>
+                <button onClick={copyVpa} data-testid="upi-copy" className="text-forest hover:text-terracotta"><Copy size={16} /></button>
+              </div>
+              <div className="text-xs text-muted2 mt-1">Payee: {settings.payee_name}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-edge pt-6">
+          <h3 className="font-serif text-2xl text-ink">After you pay</h3>
+          <p className="text-sm text-muted2 mt-1">{settings.instructions}</p>
+          <label className="block mt-4 text-xs font-semibold text-muted2 uppercase tracking-widest">UTR / transaction reference (optional)</label>
+          <input data-testid="upi-utr" value={utr} onChange={e => setUtr(e.target.value)} placeholder="12-digit UTR from your UPI app" className="mt-1 w-full px-4 py-3 border border-edge rounded-xl bg-white focus:outline-none focus:border-forest" />
+          <button onClick={confirmPaid} disabled={loading} data-testid="upi-confirm-paid" className="btn-primary w-full mt-4">
+            {loading ? "Recording..." : "I have paid"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -78,8 +172,8 @@ export default function Checkout() {
           <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Notes (optional)</label>
           <textarea data-testid="checkout-notes" rows="2" value={notes} onChange={e => setNotes(e.target.value)} className="mt-1 w-full px-4 py-3 border border-edge rounded-xl bg-white focus:outline-none focus:border-forest" />
         </div>
-        <button data-testid="checkout-place" disabled={loading} className="btn-primary w-full">{loading ? "Placing..." : `Place order · ₹${total}`}</button>
-        <p className="text-xs text-muted2 text-center">Payment gateway integration coming in Phase 2. Order will be confirmed via WhatsApp.</p>
+        <button data-testid="checkout-place" disabled={loading} className="btn-primary w-full">{loading ? "Placing..." : `Continue to UPI · ₹${total}`}</button>
+        <p className="text-xs text-muted2 text-center">Pay with any UPI app · GPay, PhonePe, Paytm, BHIM & more.</p>
       </form>
       <div className="card-earth p-6 h-fit">
         <h3 className="font-serif text-2xl text-ink">Summary</h3>
