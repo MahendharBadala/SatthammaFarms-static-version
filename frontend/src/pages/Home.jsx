@@ -4,12 +4,14 @@ import axios from "axios";
 import Hero3D from "../components/Hero3D";
 import ProductCard from "../components/ProductCard";
 import { BannerSlider, PromoCards } from "../components/HomeBanners";
+import { useSite } from "../context/SiteContext";
 import { motion } from "framer-motion";
 import { Leaf, HandHeart, SunHorizon, Truck, ArrowRight } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Home() {
+  const { site } = useSite();
   const [featured, setFeatured] = useState([]);
   useEffect(() => {
     axios.get(`${API}/products`).then(r => setFeatured(r.data.filter(p => p.featured).slice(0, 6)));
@@ -26,14 +28,14 @@ export default function Home() {
         <div className="hero-blob bg-gold -bottom-24 right-0 w-[420px] h-[420px]"></div>
         <div className="container mx-auto grid lg:grid-cols-2 gap-10 py-16 lg:py-24 items-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-            <div className="chip mb-5" data-testid="hero-badge">Organic · Chemical-free · Since generations</div>
+            <div className="chip mb-5" data-testid="hero-badge">{site.hero_badge}</div>
             <h1 className="font-serif font-medium leading-[0.95] text-5xl sm:text-6xl lg:text-7xl text-ink">
-              From our soil,
-              <br /><span className="text-forest">to your table.</span>
+              {site.hero_title_line1}
+              <br /><span className="text-forest">{site.hero_title_line2}</span>
             </h1>
-            <p className="mt-6 font-serif italic text-2xl text-terracotta">"prathiokkari intaa, nanyamaina panta"</p>
+            <p className="mt-6 font-serif italic text-2xl text-terracotta">&quot;{site.hero_tagline}&quot;</p>
             <p className="mt-3 max-w-lg text-base text-muted2 leading-relaxed">
-              Satthamma Farms grows grains, pulses, spices and pickles the way our grandparents did — with sunlight, patience and zero harmful chemicals. Every pack you receive is a small piece of Medipally in your kitchen.
+              {site.hero_paragraph}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/products" data-testid="hero-cta-shop" className="btn-primary inline-flex items-center gap-2">Shop the harvest <ArrowRight size={18} weight="bold" /></Link>
@@ -52,7 +54,7 @@ export default function Home() {
             <Hero3D />
             <div className="absolute bottom-6 left-6 card-earth p-4 max-w-[220px] backdrop-blur">
               <div className="chip mb-2">Live from farm</div>
-              <p className="font-serif text-lg leading-tight text-ink">Today's harvest: fresh turmeric roots being sun-dried.</p>
+              <p className="font-serif text-lg leading-tight text-ink">Today&apos;s harvest: fresh turmeric roots being sun-dried.</p>
             </div>
           </div>
         </div>
@@ -128,13 +130,13 @@ export default function Home() {
           </div>
           <div className="p-8 md:p-12 flex flex-col justify-center">
             <div className="chip">Our promise</div>
-            <h2 className="font-serif text-4xl mt-3 text-ink">Farming the way it was meant to be.</h2>
+            <h2 className="font-serif text-4xl mt-3 text-ink">{site.story_title}</h2>
             <p className="mt-4 text-muted2 leading-relaxed">
-              At Satthamma Farms, we practice mostly organic farming — no harmful chemicals, no artificial fertilizers, no shortcuts to force the earth. We believe patient soil grows honest food. Follow our day-to-day life on Instagram and YouTube — every harvest, every rain, every meal.
+              {site.story_text}
             </p>
             <div className="mt-6 flex gap-3 flex-wrap">
-              <a data-testid="story-cta-instagram" target="_blank" rel="noreferrer" href="https://www.instagram.com/satthammamucchatlu?igsh=YnltdW8xcW8ycDBl" className="btn-outline">Watch on Instagram</a>
-              <a data-testid="story-cta-youtube" target="_blank" rel="noreferrer" href="https://youtube.com/@sathammamucchatlu?si=7u19ztvSf8hBGz54" className="btn-primary">YouTube channel</a>
+              <a data-testid="story-cta-instagram" target="_blank" rel="noreferrer" href={site.instagram_url} className="btn-outline">Watch on Instagram</a>
+              <a data-testid="story-cta-youtube" target="_blank" rel="noreferrer" href={site.youtube_url} className="btn-primary">YouTube channel</a>
             </div>
           </div>
         </div>

@@ -93,6 +93,8 @@ class OrderIn(BaseModel):
     items: List[CartItemIn]
     address: str
     phone: str
+    customer_name: str = ""
+    pincode: str = ""
     notes: Optional[str] = ""
     coupon_code: Optional[str] = ""
 
@@ -135,6 +137,32 @@ class BannerIn(BaseModel):
     cta_link: str = ""
     active: bool = True
     sort_order: int = 0
+
+# ---------------- Site settings ----------------
+class SiteSettingsIn(BaseModel):
+    # Contact / brand
+    whatsapp_number: str = "918500812044"  # E.164 without + (wa.me format)
+    contact_phone: str = "+91 85008 12044"
+    contact_email: str = "satthammafarms@gmail.com"
+    contact_address: str = "505453, Medipally, Medipally Mandal, Jagityal Dist, Telangana"
+    instagram_url: str = "https://www.instagram.com/satthammamucchatlu"
+    youtube_url: str = "https://youtube.com/@sathammamucchatlu"
+    # Hero
+    hero_badge: str = "Organic · Chemical-free · Since generations"
+    hero_title_line1: str = "From our soil,"
+    hero_title_line2: str = "to your table."
+    hero_tagline: str = "prathiokkari intaa, nanyamaina panta"
+    hero_paragraph: str = ("Satthamma Farms grows grains, pulses, spices and pickles the way our grandparents did — "
+                          "with sunlight, patience and zero harmful chemicals. Every pack you receive is a small piece "
+                          "of Medipally in your kitchen.")
+    # Story strip
+    story_title: str = "Farming the way it was meant to be."
+    story_text: str = ("At Satthamma Farms, we practice mostly organic farming — no harmful chemicals, no artificial "
+                       "fertilizers, no shortcuts to force the earth. We believe patient soil grows honest food. "
+                       "Follow our day-to-day life on Instagram and YouTube — every harvest, every rain, every meal.")
+    # Checkout notice
+    checkout_whatsapp_note: str = ("On clicking Order, you'll be redirected to WhatsApp to confirm your order "
+                                   "with our team. Your cart + delivery details are prefilled for you.")
 
 # ---------------- App ----------------
 app = FastAPI(title="Satthamma Farms API")
@@ -411,7 +439,8 @@ async def list_categories():
 
 # --- Orders ---
 @api.post("/orders")
-async def create_order(payload: OrderIn, user: dict = Depends(get_current_user)):
+async def create_order(payload: OrderIn, request: Request):
+    # Anonymous checkout — no auth required. Order stores customer contact fields.
     total = 0.0
     items_full = []
     # Bulk-fetch all products in one query to avoid N+1
@@ -419,6 +448,8 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
         oids = [ObjectId(it.product_id) for it in payload.items]
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid product id") from exc
+    if not oids:
+        raise HTTPException(status_code=400, detail="Cart is empty")
     products = await db.products.find({"_id": {"$in": oids}}).to_list(len(oids))
     p_map = {str(p["_id"]): p for p in products}
     for it in payload.items:
@@ -434,6 +465,8 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
             "quantity": int(it.quantity),
             "line_total": line,
         })
+    if not items_full:
+        raise HTTPException(status_code=400, detail="No valid products in cart")
     # Apply coupon if provided
     subtotal = total
     discount_amount = 0.0
@@ -450,17 +483,18 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
             "discount_amount": discount_amount,
         }
     doc = {
-        "user_id": user["id"],
-        "user_email": user["email"],
+        "customer_name": payload.customer_name.strip(),
+        "phone": payload.phone,
+        "pincode": (payload.pincode or "").strip(),
+        "address": payload.address,
         "items": items_full,
         "subtotal": subtotal,
         "discount_amount": discount_amount,
         "coupon": coupon_applied,
         "total": total,
-        "address": payload.address,
-        "phone": payload.phone,
         "notes": payload.notes or "",
         "status": "pending",
+        "channel": "whatsapp",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     res = await db.orders.insert_one(doc)
@@ -468,18 +502,13 @@ async def create_order(payload: OrderIn, user: dict = Depends(get_current_user))
     # Increment coupon usage
     if coupon_applied:
         await db.coupons.update_one({"code": code}, {"$inc": {"uses": 1}})
-    order_view = {"id": str(res.inserted_id), "total": total, "items": items_full, "address": payload.address, "phone": payload.phone}
-    # Confirmation emails — buyer + admin
-    if user.get("email"):
-        _send_email(user["email"], f"Order confirmed · ₹{total} · Satthamma Farms", _order_html(order_view, "buyer"))
-    admin_email = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "satthammafarms@gmail.com")
-    _send_email(admin_email, f"[Satthamma] New order ₹{total} from {user.get('email') or user.get('phone','')}", _order_html(order_view, "admin"))
-    return {"id": str(res.inserted_id), "total": total, "subtotal": subtotal, "discount_amount": discount_amount, "status": "pending"}
-
-@api.get("/orders/mine")
-async def my_orders(user: dict = Depends(get_current_user)):
-    docs = await db.orders.find({"user_id": user["id"]}).sort("created_at", -1).to_list(200)
-    return [{**{k: v for k, v in d.items() if k != "_id"}, "id": str(d["_id"])} for d in docs]
+    return {
+        "id": str(res.inserted_id),
+        "total": total,
+        "subtotal": subtotal,
+        "discount_amount": discount_amount,
+        "status": "pending",
+    }
 
 @api.get("/admin/orders")
 async def all_orders(_admin: dict = Depends(get_admin_user)):
@@ -544,7 +573,7 @@ async def confirm_payment(oid: str, payload: OrderConfirmIn, user: dict = Depend
     }})
     return {"ok": True, "status": "payment_pending_verification"}
 
-_ALLOWED_STATUSES = {"pending", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"}
+_ALLOWED_STATUSES = {"pending", "confirmed", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"}
 
 _STATUS_COPY = {
     "paid": ("Payment confirmed · Satthamma Farms", "We've verified your payment. Your harvest is being prepared."),
@@ -735,6 +764,26 @@ async def admin_delete_banner(bid: str, _admin: dict = Depends(get_admin_user)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid id") from exc
     return {"ok": True}
+
+# --- Site settings ---
+DEFAULT_SITE_SETTINGS = SiteSettingsIn().model_dump()
+
+async def _get_site_settings() -> dict:
+    doc = await db.site.find_one({"_id": "site"})
+    if not doc:
+        await db.site.insert_one({"_id": "site", **DEFAULT_SITE_SETTINGS})
+        return dict(DEFAULT_SITE_SETTINGS)
+    return {k: doc.get(k, v) for k, v in DEFAULT_SITE_SETTINGS.items()}
+
+@api.get("/site")
+async def public_site_settings():
+    return await _get_site_settings()
+
+@api.put("/admin/site")
+async def admin_update_site_settings(payload: SiteSettingsIn, _admin: dict = Depends(get_admin_user)):
+    data = payload.model_dump()
+    await db.site.update_one({"_id": "site"}, {"$set": data}, upsert=True)
+    return {"ok": True, **data}
 
 # --- Email (SendGrid — auto mock mode until SENDGRID_API_KEY is set) ---
 def _send_email(to_email: str, subject: str, html: str, plain: Optional[str] = None) -> dict:

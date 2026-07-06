@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { useSite } from "../context/SiteContext";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Users, ShoppingBag, Package } from "@phosphor-icons/react";
+import { ShoppingBag, Package, Tag } from "@phosphor-icons/react";
 import {
-  ProductForm, ProductList, OrdersTable, UsersTable, PaymentSettingsPanel,
-  CouponsManager, BannersManager,
+  ProductForm, ProductList, OrdersTable, PaymentSettingsPanel,
+  CouponsManager, BannersManager, SiteSettingsPanel,
 } from "../components/admin/AdminSections";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -14,33 +15,34 @@ const empty = { name: "", category: "grains", price: 0, unit: "kg", description:
 
 export default function Admin() {
   const { user, loading } = useAuth();
+  const { refresh: refreshSite } = useSite();
   const [tab, setTab] = useState("products");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [users, setUsers] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [siteSettings, setSiteSettings] = useState(null);
   const [coupons, setCoupons] = useState([]);
   const [banners, setBanners] = useState([]);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
 
   const load = useCallback(async () => {
-    const [p, o, u, s, c, b] = await Promise.all([
+    const [p, o, s, c, b, si] = await Promise.all([
       axios.get(`${API}/products`),
       axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
-      axios.get(`${API}/admin/users`).catch(() => ({ data: [] })),
       axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
       axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
       axios.get(`${API}/admin/banners`).catch(() => ({ data: [] })),
+      axios.get(`${API}/site`).catch(() => ({ data: null })),
     ]);
-    setProducts(p.data); setOrders(o.data); setUsers(u.data); setSettings(s.data);
-    setCoupons(c.data); setBanners(b.data);
+    setProducts(p.data); setOrders(o.data); setSettings(s.data);
+    setCoupons(c.data); setBanners(b.data); setSiteSettings(si.data);
   }, []);
 
   useEffect(() => { if (user?.role === "admin") load(); }, [user, load]);
 
   if (loading) return <div className="container mx-auto py-20 text-center text-muted2">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/" replace />;
   if (user.role !== "admin") return <Navigate to="/" replace />;
 
   const startEdit = (p) => { setEditing(p.id); setForm({ ...empty, ...p }); };
@@ -71,18 +73,13 @@ export default function Admin() {
   const stats = [
     { icon: Package, label: "Products", n: products.length },
     { icon: ShoppingBag, label: "Orders", n: orders.length },
-    { icon: Users, label: "Users", n: users.length },
+    { icon: Tag, label: "Coupons", n: coupons.length },
   ];
 
   const saveCoupon = async (editingId, payload, done) => {
     try {
-      if (editingId) {
-        await axios.put(`${API}/admin/coupons/${editingId}`, payload);
-        toast.success("Coupon updated");
-      } else {
-        await axios.post(`${API}/admin/coupons`, payload);
-        toast.success("Coupon created");
-      }
+      if (editingId) { await axios.put(`${API}/admin/coupons/${editingId}`, payload); toast.success("Coupon updated"); }
+      else { await axios.post(`${API}/admin/coupons`, payload); toast.success("Coupon created"); }
       done?.(); load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save coupon"); }
   };
@@ -104,13 +101,8 @@ export default function Admin() {
 
   const saveBanner = async (editingId, payload, done) => {
     try {
-      if (editingId) {
-        await axios.put(`${API}/admin/banners/${editingId}`, payload);
-        toast.success("Banner updated");
-      } else {
-        await axios.post(`${API}/admin/banners`, payload);
-        toast.success("Banner created");
-      }
+      if (editingId) { await axios.put(`${API}/admin/banners/${editingId}`, payload); toast.success("Banner updated"); }
+      else { await axios.post(`${API}/admin/banners`, payload); toast.success("Banner created"); }
       done?.(); load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save banner"); }
   };
@@ -127,18 +119,27 @@ export default function Admin() {
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
+  const saveSite = async (payload) => {
+    try {
+      await axios.put(`${API}/admin/site`, payload);
+      toast.success("Site content updated — live for everyone.");
+      load();
+      refreshSite();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save"); }
+  };
+
   const tabs = [
     { k: "products", label: "Products" },
     { k: "orders", label: "Orders" },
-    { k: "users", label: "Users" },
     { k: "coupons", label: "Coupons" },
     { k: "banners", label: "Banners" },
+    { k: "site", label: "Site content" },
     { k: "payments", label: "Payments" },
   ];
 
   return (
     <div className="container mx-auto py-12">
-      <div className="flex items-end justify-between mb-8">
+      <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
         <div>
           <div className="chip">Control room</div>
           <h1 className="font-serif text-5xl text-ink mt-2">Admin Dashboard</h1>
@@ -175,9 +176,9 @@ export default function Admin() {
           load();
         } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
       }} />}
-      {tab === "users" && <UsersTable users={users} />}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} />}
       {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} />}
+      {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
       {tab === "payments" && <PaymentSettingsPanel settings={settings} onSave={async (payload) => {
         try {
           await axios.put(`${API}/admin/payments/settings`, payload);

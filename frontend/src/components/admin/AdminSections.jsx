@@ -93,7 +93,11 @@ export function ProductList({ products, onEdit, onDelete }) {
 
 export function OrdersTable({ orders, onUpdateStatus }) {
   if (orders.length === 0) return <div className="text-muted2 text-center py-16" data-testid="admin-orders">No orders yet.</div>;
-  const STATUSES = ["pending", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"];
+  const STATUSES = ["pending", "confirmed", "packed", "shipped", "delivered", "cancelled"];
+  const waLink = (o) => {
+    const num = (o.phone || "").replace(/[^0-9]/g, "");
+    return num ? `https://wa.me/${num.length === 10 ? "91" + num : num}` : null;
+  };
   return (
     <div className="space-y-3" data-testid="admin-orders">
       {orders.map(o => (
@@ -101,9 +105,14 @@ export function OrdersTable({ orders, onUpdateStatus }) {
           <div className="flex justify-between items-start flex-wrap gap-3">
             <div>
               <div className="text-xs text-muted2">{new Date(o.created_at).toLocaleString()} · Order {o.id.slice(-8).toUpperCase()}</div>
-              <div className="font-serif text-xl text-ink">{o.user_email || o.phone}</div>
-              <div className="text-sm text-muted2">{o.address} · {o.phone}</div>
-              {o.payment_utr && <div className="text-sm text-muted2">UTR: <span className="font-mono">{o.payment_utr}</span></div>}
+              <div className="font-serif text-xl text-ink">{o.customer_name || o.user_email || o.phone}</div>
+              <div className="text-sm text-muted2">
+                {o.phone}
+                {waLink(o) && <> · <a href={waLink(o)} target="_blank" rel="noreferrer" className="text-forest hover:underline">WhatsApp</a></>}
+              </div>
+              <div className="text-sm text-muted2">{o.pincode ? `${o.pincode} · ` : ""}{o.address}</div>
+              {o.coupon && <div className="text-xs text-forest mt-1">Coupon {o.coupon.code} · − ₹{o.coupon.discount_amount}</div>}
+              {o.notes && <div className="text-xs text-muted2 mt-1">Notes: {o.notes}</div>}
             </div>
             <div className="text-right">
               <div className="font-serif text-2xl text-forest">₹{o.total}</div>
@@ -163,6 +172,62 @@ export function PaymentSettingsPanel({ settings, onSave }) {
         <p className="text-xs text-muted2 mt-2">When you paste real Razorpay keys and switch provider to "Razorpay", the checkout will automatically use the Razorpay-hosted flow with webhook confirmation. No code change needed.</p>
       </div>
       <button data-testid="settings-save" className="btn-primary">Save settings</button>
+    </form>
+  );
+}
+
+// ---------------- Site settings ----------------
+const SITE_FIELDS = [
+  { key: "whatsapp_number", label: "WhatsApp number (with country code, no +)", placeholder: "918500812044", type: "text" },
+  { key: "contact_phone", label: "Contact phone (display)", type: "text" },
+  { key: "contact_email", label: "Contact email", type: "email" },
+  { key: "contact_address", label: "Contact address (multiline)", type: "textarea" },
+  { key: "instagram_url", label: "Instagram URL", type: "text" },
+  { key: "youtube_url", label: "YouTube URL", type: "text" },
+  { key: "hero_badge", label: "Hero badge (small pill on top)", type: "text" },
+  { key: "hero_title_line1", label: "Hero title — line 1", type: "text" },
+  { key: "hero_title_line2", label: "Hero title — line 2", type: "text" },
+  { key: "hero_tagline", label: "Hero tagline (Telugu quote)", type: "text" },
+  { key: "hero_paragraph", label: "Hero paragraph", type: "textarea" },
+  { key: "story_title", label: "Story section title", type: "text" },
+  { key: "story_text", label: "Story section text", type: "textarea" },
+  { key: "checkout_whatsapp_note", label: "Checkout WhatsApp notice (shown before Order button)", type: "textarea" },
+];
+
+export function SiteSettingsPanel({ site, onSave }) {
+  const [form, setForm] = React.useState(site || {});
+  React.useEffect(() => { setForm(site || {}); }, [site]);
+  if (!site) return null;
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSave(form); }} className="card-earth p-6 max-w-3xl space-y-4" data-testid="site-settings-form">
+      <h3 className="font-serif text-2xl text-ink">Site content</h3>
+      <p className="text-sm text-muted2">Everything below is live across the site the moment you save. This is the fastest way to update prices-free content, contact numbers, and homepage copy.</p>
+      <div className="grid md:grid-cols-2 gap-4">
+        {SITE_FIELDS.map(f => (
+          <div key={f.key} className={f.type === "textarea" ? "md:col-span-2" : ""}>
+            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">{f.label}</label>
+            {f.type === "textarea" ? (
+              <textarea
+                data-testid={`site-${f.key}`}
+                rows="3"
+                value={form[f.key] || ""}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest"
+              />
+            ) : (
+              <input
+                data-testid={`site-${f.key}`}
+                type={f.type}
+                placeholder={f.placeholder || ""}
+                value={form[f.key] || ""}
+                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <button data-testid="site-save" className="btn-primary">Save site settings</button>
     </form>
   );
 }
