@@ -1,19 +1,30 @@
 import React from "react";
 
-export function Logo({ className = "", size = 40 }) {
+/**
+ * Satthamma Farms brand mark — hand-illustrated seal.
+ * Rendered as an <img> so the artwork stays pixel-perfect (Ultra-HD source).
+ * width-controlled via className / size prop.
+ */
+export function Logo({ size = 56, showWordmark = false, className = "" }) {
   return (
-    <div className={`flex items-center gap-3 ${className}`} data-testid="brand-logo">
-      <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
-        <circle cx="32" cy="32" r="30" fill="#2C4C3B" />
-        <path d="M32 14c-6 6-6 14 0 20 6-6 6-14 0-20z" fill="#D4A373" />
-        <path d="M14 40c8 0 14-4 18-10-4 10-10 14-18 14v-4z" fill="#C5684B" />
-        <path d="M50 40c-8 0-14-4-18-10 4 10 10 14 18 14v-4z" fill="#C5684B" />
-        <circle cx="32" cy="46" r="3" fill="#F9F6F0" />
-      </svg>
-      <div className="leading-none">
-        <div className="font-serif text-lg font-semibold tracking-tight text-forest">SATTHAMMA</div>
-        <div className="font-serif text-[11px] tracking-[0.35em] text-terracotta -mt-0.5">FARMS</div>
-      </div>
+    <div className={`flex items-center gap-2 select-none ${className}`}>
+      <img
+        src="/brand/satthamma-logo.png"
+        alt="Satthamma Farms"
+        width={size}
+        height={size}
+        loading="eager"
+        decoding="async"
+        style={{ width: size, height: size }}
+        className="object-contain drop-shadow-sm"
+        data-testid="brand-logo-img"
+      />
+      {showWordmark && (
+        <div className="leading-tight hidden sm:block">
+          <div className="font-serif text-lg text-ink tracking-wide">SATTHAMMA</div>
+          <div className="text-[10px] tracking-[0.35em] text-terracotta -mt-0.5">FARMS</div>
+        </div>
+      )}
     </div>
   );
 }
