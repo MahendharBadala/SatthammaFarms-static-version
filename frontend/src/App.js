@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -16,6 +16,12 @@ import Checkout from "./pages/Checkout";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Admin from "./pages/Admin";
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" in window ? "instant" : "auto" }); }, [pathname]);
+  return null;
+}
 
 function Shell({ children }) {
   const loc = useLocation();
@@ -36,6 +42,7 @@ function App() {
         <SiteProvider>
           <CartProvider>
             <Toaster position="top-right" richColors />
+            <ScrollToTop />
             <Shell>
               <Routes>
                 <Route path="/" element={<Home />} />

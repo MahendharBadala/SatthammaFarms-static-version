@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { useSite } from "../context/SiteContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ShoppingBag, Package, Tag } from "@phosphor-icons/react";
+import { ShoppingBag, Package, Tag, Plus, SignOut } from "@phosphor-icons/react";
 import {
   ProductForm, ProductList, OrdersTable, PaymentSettingsPanel,
   CouponsManager, BannersManager, SiteSettingsPanel,
@@ -14,8 +14,9 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const empty = { name: "", category: "grains", price: 0, unit: "kg", description: "", image_url: "", video_url: "", gallery: [], stock: 100, featured: false };
 
 export default function Admin() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const { refresh: refreshSite } = useSite();
+  const nav = useNavigate();
   const [tab, setTab] = useState("products");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -24,6 +25,7 @@ export default function Admin() {
   const [coupons, setCoupons] = useState([]);
   const [banners, setBanners] = useState([]);
   const [editing, setEditing] = useState(null);
+  const [showProductForm, setShowProductForm] = useState(false);
   const [form, setForm] = useState(empty);
 
   const load = useCallback(async () => {
@@ -45,8 +47,9 @@ export default function Admin() {
   if (!user) return <Navigate to="/" replace />;
   if (user.role !== "admin") return <Navigate to="/" replace />;
 
-  const startEdit = (p) => { setEditing(p.id); setForm({ ...empty, ...p }); };
-  const cancel = () => { setEditing(null); setForm(empty); };
+  const startEdit = (p) => { setEditing(p.id); setForm({ ...empty, ...p }); setShowProductForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const cancel = () => { setEditing(null); setForm(empty); setShowProductForm(false); };
+  const openAdd = () => { setEditing(null); setForm(empty); setShowProductForm(true); };
 
   const save = async (e) => {
     e.preventDefault();
@@ -145,27 +148,45 @@ export default function Admin() {
           <h1 className="font-serif text-5xl text-ink mt-2">Admin Dashboard</h1>
           <p className="text-muted2 mt-1">Signed in as {user.email}</p>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {stats.map(s => (
-            <div key={s.label} className="card-earth px-4 py-3 min-w-[110px]">
-              <s.icon size={20} className="text-terracotta" weight="duotone" />
-              <div className="font-serif text-2xl text-forest">{s.n}</div>
-              <div className="text-[10px] uppercase tracking-widest text-muted2">{s.label}</div>
-            </div>
-          ))}
+        <div className="flex items-start gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            {stats.map(s => (
+              <div key={s.label} className="card-earth px-4 py-3 min-w-[110px]">
+                <s.icon size={20} className="text-terracotta" weight="duotone" />
+                <div className="font-serif text-2xl text-forest">{s.n}</div>
+                <div className="text-[10px] uppercase tracking-widest text-muted2">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <button
+            data-testid="admin-logout"
+            onClick={async () => { await logout(); toast.success("Signed out"); nav("/"); }}
+            className="btn-outline inline-flex items-center gap-2 !py-2 !px-4"
+          >
+            <SignOut size={16} weight="duotone" /> Logout
+          </button>
         </div>
       </div>
 
       <div className="flex gap-2 border-b border-edge mb-6 flex-wrap">
         {tabs.map(t => (
-          <button key={t.k} data-testid={`admin-tab-${t.k}`} onClick={() => setTab(t.k)}
+          <button key={t.k} data-testid={`admin-tab-${t.k}`} onClick={() => { setTab(t.k); cancel(); }}
             className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${tab === t.k ? "border-forest text-forest font-semibold" : "border-transparent text-muted2 hover:text-forest"}`}>{t.label}</button>
         ))}
       </div>
 
       {tab === "products" && (
-        <div className="grid lg:grid-cols-[420px,1fr] gap-8">
-          <ProductForm form={form} setForm={setForm} editing={editing} onSave={save} onCancel={cancel} />
+        <div className="space-y-6">
+          <div className="flex justify-end">
+            {!showProductForm && (
+              <button data-testid="admin-add-product-btn" onClick={openAdd} className="btn-primary inline-flex items-center gap-2">
+                <Plus size={18} weight="bold" /> Add product
+              </button>
+            )}
+          </div>
+          {showProductForm && (
+            <ProductForm form={form} setForm={setForm} editing={editing} onSave={save} onCancel={cancel} />
+          )}
           <ProductList products={products} onEdit={startEdit} onDelete={del} />
         </div>
       )}

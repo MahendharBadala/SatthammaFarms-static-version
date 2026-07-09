@@ -8,8 +8,12 @@ export function ProductForm({ form, setForm, editing, onSave, onCancel }) {
     ["stock", "Stock", "number"],
   ];
   return (
-    <form onSubmit={onSave} className="card-earth p-6 h-fit sticky top-24 space-y-3 max-h-[calc(100vh-8rem)] overflow-y-auto" data-testid="product-form">
-      <h3 className="font-serif text-2xl text-ink">{editing ? "Edit product" : "Add product"}</h3>
+    <form onSubmit={onSave} className="card-earth p-6 space-y-3" data-testid="product-form">
+      <div className="flex items-center justify-between">
+        <h3 className="font-serif text-2xl text-ink">{editing ? "Edit product" : "Add product"}</h3>
+        <button type="button" data-testid="product-form-close" onClick={onCancel} aria-label="Close form"
+          className="rounded-full border border-edge p-2 hover:bg-cream2 text-muted2">✕</button>
+      </div>
       {textFields.map(([k, l, t]) => (
         <div key={k}>
           <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">{l}</label>
@@ -64,9 +68,11 @@ export function ProductForm({ form, setForm, editing, onSave, onCancel }) {
       </label>
       <div className="flex gap-2 pt-2">
         <button data-testid="product-form-save" className="btn-primary flex-1 inline-flex items-center justify-center gap-2">
-          <Plus size={16} /> {editing ? "Update" : "Add"}
+          <Plus size={16} /> {editing ? "Update details" : "Add product"}
         </button>
-        {editing && <button type="button" onClick={onCancel} className="btn-outline">Cancel</button>}
+        <button type="button" data-testid="product-form-cancel" onClick={onCancel} className="btn-outline">
+          {editing ? "Back" : "Cancel"}
+        </button>
       </div>
     </form>
   );
@@ -171,7 +177,10 @@ export function PaymentSettingsPanel({ settings, onSave }) {
         </div>
         <p className="text-xs text-muted2 mt-2">When you paste real Razorpay keys and switch provider to "Razorpay", the checkout will automatically use the Razorpay-hosted flow with webhook confirmation. No code change needed.</p>
       </div>
-      <button data-testid="settings-save" className="btn-primary">Save settings</button>
+      <div className="flex gap-2 pt-2">
+        <button data-testid="settings-save" className="btn-primary">Save settings</button>
+        <button type="button" data-testid="settings-cancel" onClick={() => setForm(settings || {})} className="btn-outline">Discard changes</button>
+      </div>
     </form>
   );
 }
@@ -227,7 +236,10 @@ export function SiteSettingsPanel({ site, onSave }) {
           </div>
         ))}
       </div>
-      <button data-testid="site-save" className="btn-primary">Save site settings</button>
+      <div className="flex gap-2 pt-2">
+        <button data-testid="site-save" className="btn-primary">Save site settings</button>
+        <button type="button" data-testid="site-cancel" onClick={() => setForm(site || {})} className="btn-outline">Discard changes</button>
+      </div>
     </form>
   );
 }
