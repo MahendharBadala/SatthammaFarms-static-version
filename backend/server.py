@@ -940,13 +940,13 @@ async def on_startup():
     # OTP TTL cleanup: docs auto-purged 15 min after creation
     await db.otp_codes.create_index("created_at")
     # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@satthammafarms.com").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
+    admin_email = os.environ.get("ADMIN_EMAIL", "Satthammafarms@gmail.com").lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "Mahi@1234")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({
             "email": admin_email,
-            "name": "Satthamma Admin",
+            "name": "Satthamma",
             "phone": "8500812044",
             "password_hash": hash_password(admin_password),
             "role": "admin",
