@@ -155,6 +155,12 @@ class SiteSettingsIn(BaseModel):
     hero_paragraph: str = ("Satthamma Farms grows grains, pulses, spices and pickles the way our grandparents did — "
                           "with sunlight, patience and zero harmful chemicals. Every pack you receive is a small piece "
                           "of Medipally in your kitchen.")
+    # Live from farm — admin-editable photo/video shown beside the hero.
+    # live_media_kind is "image" or "video"; when live_media_url is empty the
+    # site falls back to the decorative animation instead.
+    live_media_url: str = ""
+    live_media_kind: str = "image"
+    live_caption: str = "Today's harvest: fresh turmeric roots being sun-dried."
     # Story strip
     story_title: str = "Farming the way it was meant to be."
     story_text: str = ("At Satthamma Farms, we practice mostly organic farming — no harmful chemicals, no artificial "
@@ -934,8 +940,8 @@ async def on_startup():
     # OTP TTL cleanup: docs auto-purged 15 min after creation
     await db.otp_codes.create_index("created_at")
     # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "mahendharbadala0@gmail.com").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "Mahi@1234")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@satthammafarms.com").lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({
