@@ -30,7 +30,7 @@ export function BannerSlider() {
 
   return (
     <section className="container mx-auto pt-6" data-testid="home-banner-slider">
-      <div className="relative overflow-hidden rounded-3xl border border-edge bg-forest text-cream">
+      <div className="relative overflow-hidden rounded-3xl border border-edge bg-forest text-cream h-[320px] md:h-[380px]">
         <AnimatePresence mode="wait">
           <motion.div
             key={s.id}
@@ -38,18 +38,18 @@ export function BannerSlider() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -40 }}
             transition={{ duration: 0.5 }}
-            className="relative min-h-[260px] md:min-h-[300px]"
+            className="absolute inset-0"
           >
             {s.image_url && (
               <img src={resolveMediaUrl(s.image_url)} alt={s.title} className="absolute inset-0 w-full h-full object-cover opacity-45" />
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-forest/85 via-forest/60 to-transparent" />
-            <div className="relative p-8 md:p-12 max-w-2xl">
-              <div className="chip !bg-gold/25 !text-gold border-gold/40">Featured</div>
-              <h2 className="font-serif text-3xl md:text-5xl mt-3 leading-tight text-cream">{s.title}</h2>
-              {s.subtitle && <p className="mt-3 text-cream/80 text-base md:text-lg max-w-lg">{s.subtitle}</p>}
+            <div className="relative p-8 md:p-12 max-w-2xl h-full flex flex-col justify-center">
+              <div className="chip !bg-gold/25 !text-gold border-gold/40 w-fit">Featured</div>
+              <h2 className="font-serif text-3xl md:text-5xl mt-3 leading-tight text-cream line-clamp-2">{s.title}</h2>
+              {s.subtitle && <p className="mt-3 text-cream/80 text-base md:text-lg max-w-lg line-clamp-2">{s.subtitle}</p>}
               {s.cta_link && (
-                <Link to={s.cta_link} data-testid={`banner-slide-cta-${s.id}`} className="btn-primary mt-6 inline-flex items-center gap-2">
+                <Link to={s.cta_link} data-testid={`banner-slide-cta-${s.id}`} className="btn-primary mt-6 inline-flex items-center gap-2 w-fit">
                   {s.cta_label || "Shop now"} <ArrowRight size={16} weight="bold" />
                 </Link>
               )}
