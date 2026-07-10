@@ -4,6 +4,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { SiteProvider } from "./context/SiteContext";
 import { Toaster } from "sonner";
+import SplashScreen from "./components/SplashScreen";
 
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -36,11 +37,14 @@ function Shell({ children }) {
 }
 
 function App() {
+  // Only show the splash on a genuine fresh load of the site (first mount),
+  // never again while the user navigates between pages in the same visit.
   return (
     <BrowserRouter>
       <AuthProvider>
         <SiteProvider>
           <CartProvider>
+            <SplashScreen />
             <Toaster position="top-right" richColors />
             <ScrollToTop />
             <Shell>
