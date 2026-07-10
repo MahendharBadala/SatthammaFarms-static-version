@@ -78,35 +78,72 @@ export function ProductForm({ form, setForm, editing, onSave, onCancel }) {
   );
 }
 
-export function ProductList({ products, onEdit, onDelete }) {
+export function ProductList({ products, onEdit, onDelete, deletingIds, search = "" }) {
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? products.filter(p => `${p.name} ${p.category}`.toLowerCase().includes(query))
+    : products;
+
   return (
-    <div className="space-y-3" data-testid="admin-product-list">
-      {products.map(p => (
-        <div key={p.id} className="card-earth p-4 flex gap-4 items-center">
-          <img src={resolveMediaUrl(p.image_url)} alt={p.name} className="w-20 h-20 object-cover rounded-lg" />
-          <div className="flex-1">
-            <div className="text-[10px] uppercase tracking-widest text-terracotta">{p.category}</div>
-            <h4 className="font-serif text-xl text-ink">{p.name}</h4>
-            <div className="text-sm text-muted2">₹{p.price} / {p.unit} · stock {p.stock} {p.featured && "· ★ featured"} {p.gallery?.length ? `· ${p.gallery.length} extra photo${p.gallery.length > 1 ? "s" : ""}` : ""}</div>
+    <div>
+      <div className="space-y-3" data-testid="admin-product-list">
+        {filtered.length === 0 && (
+          <div className="text-muted2 text-center py-16">
+            {products.length === 0 ? "No products yet." : "No products match your search."}
           </div>
-          <button data-testid={`admin-edit-${p.id}`} onClick={() => onEdit(p)} className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
-          <button data-testid={`admin-delete-${p.id}`} onClick={() => onDelete(p.id)} className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta"><Trash size={16} /></button>
-        </div>
-      ))}
+        )}
+        {filtered.map(p => {
+          const isDeleting = deletingIds?.has(p.id);
+          return (
+            <div key={p.id} className="card-earth p-4 flex gap-4 items-center">
+              <img src={resolveMediaUrl(p.image_url)} alt={p.name} className="w-20 h-20 object-cover rounded-lg" />
+              <div className="flex-1">
+                <div className="text-[10px] uppercase tracking-widest text-terracotta">{p.category}</div>
+                <h4 className="font-serif text-xl text-ink">{p.name}</h4>
+                <div className="text-sm text-muted2">₹{p.price} / {p.unit} · stock {p.stock} {p.featured && "· ★ featured"} {p.gallery?.length ? `· ${p.gallery.length} extra photo${p.gallery.length > 1 ? "s" : ""}` : ""}</div>
+              </div>
+              <button data-testid={`admin-edit-${p.id}`} onClick={() => onEdit(p)} className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
+              <button
+                data-testid={`admin-delete-${p.id}`}
+                onClick={() => onDelete(p.id)}
+                disabled={isDeleting}
+                className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash size={16} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 export function OrdersTable({ orders, onUpdateStatus }) {
+  const [q, setQ] = React.useState("");
   if (orders.length === 0) return <div className="text-muted2 text-center py-16" data-testid="admin-orders">No orders yet.</div>;
   const STATUSES = ["pending", "confirmed", "packed", "shipped", "delivered", "cancelled"];
   const waLink = (o) => {
     const num = (o.phone || "").replace(/[^0-9]/g, "");
     return num ? `https://wa.me/${num.length === 10 ? "91" + num : num}` : null;
   };
+  const query = q.trim().toLowerCase();
+  const filtered = query
+    ? orders.filter(o => `${o.customer_name || ""} ${o.user_email || ""} ${o.phone || ""} ${o.id} ${o.status || ""}`.toLowerCase().includes(query))
+    : orders;
   return (
+    <div>
+    <input
+      data-testid="admin-order-search"
+      type="text"
+      value={q}
+      onChange={e => setQ(e.target.value)}
+      placeholder="Search orders by customer, phone, order id or status…"
+      className="mb-4 w-full px-4 py-2.5 border border-edge rounded-full bg-white focus:outline-none focus:border-forest text-sm"
+    />
     <div className="space-y-3" data-testid="admin-orders">
-      {orders.map(o => (
+      {filtered.length === 0 && <div className="text-muted2 text-center py-16">No orders match your search.</div>}
+      {filtered.map(o => (
         <div key={o.id} className="card-earth p-5">
           <div className="flex justify-between items-start flex-wrap gap-3">
             <div>
@@ -135,6 +172,7 @@ export function OrdersTable({ orders, onUpdateStatus }) {
           <div className="mt-3 text-sm text-muted2">{o.items.map(i => `${i.name} × ${i.quantity}`).join(" · ")}</div>
         </div>
       ))}
+    </div>
     </div>
   );
 }
@@ -198,6 +236,7 @@ const SITE_FIELDS = [
   { key: "hero_title_line2", label: "Hero title — line 2", type: "text" },
   { key: "hero_tagline", label: "Hero tagline (Telugu quote)", type: "text" },
   { key: "hero_paragraph", label: "Hero paragraph", type: "textarea" },
+  { key: "live_caption", label: "\"Live from farm\" caption", type: "text" },
   { key: "story_title", label: "Story section title", type: "text" },
   { key: "story_text", label: "Story section text", type: "textarea" },
   { key: "checkout_whatsapp_note", label: "Checkout WhatsApp notice (shown before Order button)", type: "textarea" },
@@ -236,6 +275,34 @@ export function SiteSettingsPanel({ site, onSave }) {
           </div>
         ))}
       </div>
+      <div className="border-t border-edge pt-4">
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">"Live from farm" media</label>
+        <p className="text-xs text-muted2 mt-1 mb-3">
+          Upload a photo or a short video from the farm — it'll appear on the homepage next to the hero text.
+          Upload it in whatever shape it naturally is (portrait, landscape, square) — the site adjusts to fit it, nothing gets force-cropped.
+          Leave this empty to show the default animation instead.
+        </p>
+        <div className="flex gap-4 mb-3">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="radio" name="live_media_kind" data-testid="live-media-kind-image"
+              checked={(form.live_media_kind || "image") === "image"}
+              onChange={() => setForm({ ...form, live_media_kind: "image" })} />
+            Photo
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="radio" name="live_media_kind" data-testid="live-media-kind-video"
+              checked={form.live_media_kind === "video"}
+              onChange={() => setForm({ ...form, live_media_kind: "video" })} />
+            Video
+          </label>
+        </div>
+        <MediaUploader
+          kind={form.live_media_kind === "video" ? "video" : "image"}
+          value={form.live_media_url || ""}
+          onChange={(url) => setForm({ ...form, live_media_url: url })}
+          testId="upload-live-media"
+        />
+      </div>
       <div className="flex gap-2 pt-2">
         <button data-testid="site-save" className="btn-primary">Save site settings</button>
         <button type="button" data-testid="site-cancel" onClick={() => setForm(site || {})} className="btn-outline">Discard changes</button>
@@ -270,9 +337,11 @@ export function UsersTable({ users }) {
 // ---------------- Coupons ----------------
 const EMPTY_COUPON = { code: "", type: "percent", value: 10, min_order: 0, max_uses: "", expires_at: "", active: true };
 
-export function CouponsManager({ coupons, onSave, onDelete, onToggleActive }) {
+export function CouponsManager({ coupons, onSave, onDelete, onToggleActive, deletingIds }) {
   const [form, setForm] = React.useState(EMPTY_COUPON);
   const [editing, setEditing] = React.useState(null);
+  const [showForm, setShowForm] = React.useState(false);
+  const [q, setQ] = React.useState("");
 
   const startEdit = (c) => {
     setEditing(c.id);
@@ -285,8 +354,10 @@ export function CouponsManager({ coupons, onSave, onDelete, onToggleActive }) {
       expires_at: c.expires_at ? c.expires_at.slice(0, 10) : "",
       active: c.active,
     });
+    setShowForm(true);
   };
-  const cancel = () => { setEditing(null); setForm(EMPTY_COUPON); };
+  const cancel = () => { setEditing(null); setForm(EMPTY_COUPON); setShowForm(false); };
+  const openAdd = () => { setEditing(null); setForm(EMPTY_COUPON); setShowForm(true); };
 
   const submit = (e) => {
     e.preventDefault();
@@ -302,88 +373,125 @@ export function CouponsManager({ coupons, onSave, onDelete, onToggleActive }) {
     onSave(editing, payload, () => { cancel(); });
   };
 
+  const query = q.trim().toLowerCase();
+  const filtered = query ? coupons.filter(c => c.code.toLowerCase().includes(query)) : coupons;
+
   return (
-    <div className="grid lg:grid-cols-[420px,1fr] gap-8" data-testid="admin-coupons">
-      <form onSubmit={submit} className="card-earth p-6 h-fit sticky top-24 space-y-3" data-testid="coupon-form">
-        <h3 className="font-serif text-2xl text-ink">{editing ? "Edit coupon" : "Add coupon"}</h3>
-        <div>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Code</label>
-          <input data-testid="coupon-code" required value={form.code} onChange={e => setForm({ ...form, code: e.target.value })}
-            placeholder="HARVEST10" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest uppercase" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Type</label>
-            <select data-testid="coupon-type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}
-              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
-              <option value="percent">Percent (%)</option>
-              <option value="flat">Flat (₹)</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
-              Value {form.type === "percent" ? "(%)" : "(₹)"}
-            </label>
-            <input data-testid="coupon-value" required type="number" min="0" step="0.01" value={form.value}
-              onChange={e => setForm({ ...form, value: e.target.value })}
-              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Min order (₹)</label>
-          <input data-testid="coupon-min-order" type="number" min="0" value={form.min_order}
-            onChange={e => setForm({ ...form, min_order: e.target.value })}
-            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Max uses</label>
-            <input data-testid="coupon-max-uses" type="number" min="0" placeholder="unlimited" value={form.max_uses}
-              onChange={e => setForm({ ...form, max_uses: e.target.value })}
-              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Expires</label>
-            <input data-testid="coupon-expires" type="date" value={form.expires_at}
-              onChange={e => setForm({ ...form, expires_at: e.target.value })}
-              className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-          </div>
-        </div>
-        <label className="inline-flex items-center gap-2 text-sm pt-2">
-          <input data-testid="coupon-active" type="checkbox" checked={form.active}
-            onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
-        </label>
-        <div className="flex gap-2 pt-2">
-          <button data-testid="coupon-save" className="btn-primary flex-1">{editing ? "Update" : "Add coupon"}</button>
-          {editing && <button type="button" onClick={cancel} className="btn-outline">Cancel</button>}
-        </div>
-      </form>
-      <div className="space-y-3" data-testid="coupon-list">
-        {coupons.length === 0 && <div className="text-muted2 text-center py-16">No coupons yet. Create one to run a promo.</div>}
-        {coupons.map(c => (
-          <div key={c.id} className="card-earth p-5 flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[220px]">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-lg text-ink" data-testid={`coupon-row-code-${c.id}`}>{c.code}</span>
-                <span className={`chip ${c.active ? "!bg-forest/10 !text-forest" : "!bg-muted2/10 !text-muted2"}`}>{c.active ? "Active" : "Inactive"}</span>
+    <div data-testid="admin-coupons">
+      <div className="flex gap-3 items-center flex-wrap mb-4">
+        <input
+          data-testid="admin-coupon-search"
+          type="text"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Search coupons by code…"
+          className="flex-1 min-w-[220px] px-4 py-2.5 border border-edge rounded-full bg-white focus:outline-none focus:border-forest text-sm"
+        />
+        {!showForm && (
+          <button data-testid="admin-add-coupon-btn" onClick={openAdd} className="btn-primary inline-flex items-center gap-2 shrink-0">
+            <Plus size={18} weight="bold" /> Add coupon
+          </button>
+        )}
+      </div>
+      <div className={showForm ? "grid lg:grid-cols-[420px,1fr] gap-8 items-start" : ""}>
+        {showForm && (
+          <form onSubmit={submit} className="card-earth p-6 h-fit lg:sticky lg:top-24 space-y-3" data-testid="coupon-form">
+            <h3 className="font-serif text-2xl text-ink">{editing ? "Edit coupon" : "Add coupon"}</h3>
+            <div>
+              <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Code</label>
+              <input data-testid="coupon-code" required value={form.code} onChange={e => setForm({ ...form, code: e.target.value })}
+                placeholder="HARVEST10" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest uppercase" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Type</label>
+                <select data-testid="coupon-type" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
+                  <option value="percent">Percent (%)</option>
+                  <option value="flat">Flat (₹)</option>
+                </select>
               </div>
-              <div className="text-sm text-muted2 mt-1">
-                {c.type === "percent" ? `${c.value}% off` : `₹${c.value} off`}
-                {c.min_order > 0 && ` · min ₹${c.min_order}`}
-                {c.max_uses ? ` · ${c.uses}/${c.max_uses} used` : ` · ${c.uses} used`}
-                {c.expires_at && ` · expires ${new Date(c.expires_at).toLocaleDateString()}`}
+              <div>
+                <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
+                  Value {form.type === "percent" ? "(%)" : "(₹)"}
+                </label>
+                <input data-testid="coupon-value" required type="number" min="0" step="0.01" value={form.value}
+                  onChange={e => setForm({ ...form, value: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
               </div>
             </div>
-            <button data-testid={`coupon-toggle-${c.id}`} onClick={() => onToggleActive(c)}
-              className="text-sm rounded-full border border-edge px-3 py-1 hover:bg-cream2">
-              {c.active ? "Deactivate" : "Activate"}
-            </button>
-            <button data-testid={`coupon-edit-${c.id}`} onClick={() => startEdit(c)}
-              className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
-            <button data-testid={`coupon-delete-${c.id}`} onClick={() => onDelete(c.id)}
-              className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta"><Trash size={16} /></button>
+            <div>
+              <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Min order (₹)</label>
+              <input data-testid="coupon-min-order" type="number" min="0" value={form.min_order}
+                onChange={e => setForm({ ...form, min_order: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Max uses</label>
+                <input data-testid="coupon-max-uses" type="number" min="0" placeholder="unlimited" value={form.max_uses}
+                  onChange={e => setForm({ ...form, max_uses: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Expires</label>
+                <input data-testid="coupon-expires" type="date" value={form.expires_at}
+                  onChange={e => setForm({ ...form, expires_at: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+              </div>
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm pt-2">
+              <input data-testid="coupon-active" type="checkbox" checked={form.active}
+                onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
+            </label>
+            <div className="flex gap-2 pt-2">
+              <button data-testid="coupon-save" className="btn-primary flex-1">{editing ? "Update" : "Add coupon"}</button>
+              <button type="button" data-testid="coupon-form-cancel" onClick={cancel} className="btn-outline">Cancel</button>
+            </div>
+          </form>
+        )}
+        <div>
+          <div className="space-y-3" data-testid="coupon-list">
+            {filtered.length === 0 && (
+              <div className="text-muted2 text-center py-16">
+                {coupons.length === 0 ? "No coupons yet. Create one to run a promo." : "No coupons match your search."}
+              </div>
+            )}
+            {filtered.map(c => {
+              const isDeleting = deletingIds?.has(c.id);
+              return (
+                <div key={c.id} className="card-earth p-5 flex flex-wrap items-center gap-4">
+                  <div className="flex-1 min-w-[220px]">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-lg text-ink" data-testid={`coupon-row-code-${c.id}`}>{c.code}</span>
+                      <span className={`chip ${c.active ? "!bg-forest/10 !text-forest" : "!bg-muted2/10 !text-muted2"}`}>{c.active ? "Active" : "Inactive"}</span>
+                    </div>
+                    <div className="text-sm text-muted2 mt-1">
+                      {c.type === "percent" ? `${c.value}% off` : `₹${c.value} off`}
+                      {c.min_order > 0 && ` · min ₹${c.min_order}`}
+                      {c.max_uses ? ` · ${c.uses}/${c.max_uses} used` : ` · ${c.uses} used`}
+                      {c.expires_at && ` · expires ${new Date(c.expires_at).toLocaleDateString()}`}
+                    </div>
+                  </div>
+                  <button data-testid={`coupon-toggle-${c.id}`} onClick={() => onToggleActive(c)}
+                    className="text-sm rounded-full border border-edge px-3 py-1 hover:bg-cream2">
+                    {c.active ? "Deactivate" : "Activate"}
+                  </button>
+                  <button data-testid={`coupon-edit-${c.id}`} onClick={() => startEdit(c)}
+                    className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
+                  <button
+                    data-testid={`coupon-delete-${c.id}`}
+                    onClick={() => onDelete(c.id)}
+                    disabled={isDeleting}
+                    className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash size={16} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -392,104 +500,147 @@ export function CouponsManager({ coupons, onSave, onDelete, onToggleActive }) {
 // ---------------- Banners ----------------
 const EMPTY_BANNER = { kind: "slider", title: "", subtitle: "", image_url: "", cta_label: "", cta_link: "", active: true, sort_order: 0 };
 
-export function BannersManager({ banners, onSave, onDelete, onToggleActive }) {
+export function BannersManager({ banners, onSave, onDelete, onToggleActive, deletingIds }) {
   const [form, setForm] = React.useState(EMPTY_BANNER);
   const [editing, setEditing] = React.useState(null);
+  const [showForm, setShowForm] = React.useState(false);
+  const [q, setQ] = React.useState("");
 
   const startEdit = (b) => {
     setEditing(b.id);
     setForm({ kind: b.kind, title: b.title, subtitle: b.subtitle, image_url: b.image_url, cta_label: b.cta_label, cta_link: b.cta_link, active: b.active, sort_order: b.sort_order || 0 });
+    setShowForm(true);
   };
-  const cancel = () => { setEditing(null); setForm(EMPTY_BANNER); };
+  const cancel = () => { setEditing(null); setForm(EMPTY_BANNER); setShowForm(false); };
+  const openAdd = () => { setEditing(null); setForm(EMPTY_BANNER); setShowForm(true); };
 
   const submit = (e) => {
     e.preventDefault();
     onSave(editing, { ...form, sort_order: Number(form.sort_order) || 0 }, () => { cancel(); });
   };
 
+  const query = q.trim().toLowerCase();
+  const filtered = query
+    ? banners.filter(b => `${b.title} ${b.subtitle}`.toLowerCase().includes(query))
+    : banners;
+
   return (
-    <div className="grid lg:grid-cols-[420px,1fr] gap-8" data-testid="admin-banners">
-      <form onSubmit={submit} className="card-earth p-6 h-fit sticky top-24 space-y-3" data-testid="banner-form">
-        <h3 className="font-serif text-2xl text-ink">{editing ? "Edit banner" : "Add banner"}</h3>
-        <div>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Placement</label>
-          <select data-testid="banner-kind" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}
-            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
-            <option value="slider">Top slider (above hero)</option>
-            <option value="promo">Promo card (below hero)</option>
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Title</label>
-          <input data-testid="banner-title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Subtitle</label>
-          <input data-testid="banner-subtitle" value={form.subtitle} onChange={e => setForm({ ...form, subtitle: e.target.value })}
-            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-        </div>
-        <MediaUploader
-          kind="image"
-          label="Banner image"
-          value={form.image_url}
-          onChange={(url) => setForm({ ...form, image_url: url })}
-          testId="upload-banner-image"
-          compact
+    <div data-testid="admin-banners">
+      <div className="flex gap-3 items-center flex-wrap mb-4">
+        <input
+          data-testid="admin-banner-search"
+          type="text"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder="Search banners by title or subtitle…"
+          className="flex-1 min-w-[220px] px-4 py-2.5 border border-edge rounded-full bg-white focus:outline-none focus:border-forest text-sm"
         />
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">CTA label</label>
-            <input data-testid="banner-cta-label" value={form.cta_label} onChange={e => setForm({ ...form, cta_label: e.target.value })}
-              placeholder="Shop now" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">CTA link</label>
-            <input data-testid="banner-cta-link" value={form.cta_link} onChange={e => setForm({ ...form, cta_link: e.target.value })}
-              placeholder="/products" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Sort order</label>
-          <input data-testid="banner-sort" type="number" value={form.sort_order}
-            onChange={e => setForm({ ...form, sort_order: e.target.value })}
-            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-        </div>
-        <label className="inline-flex items-center gap-2 text-sm pt-2">
-          <input data-testid="banner-active" type="checkbox" checked={form.active}
-            onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
-        </label>
-        <div className="flex gap-2 pt-2">
-          <button data-testid="banner-save" className="btn-primary flex-1">{editing ? "Update" : "Add banner"}</button>
-          {editing && <button type="button" onClick={cancel} className="btn-outline">Cancel</button>}
-        </div>
-      </form>
-      <div className="space-y-3" data-testid="banner-list">
-        {banners.length === 0 && <div className="text-muted2 text-center py-16">No banners yet. Create a slider or promo card for your Home page.</div>}
-        {banners.map(b => (
-          <div key={b.id} className="card-earth p-4 flex flex-wrap items-center gap-4">
-            {b.image_url ? (
-              <img src={resolveMediaUrl(b.image_url)} alt="" className="w-24 h-16 object-cover rounded-lg" />
-            ) : (
-              <div className="w-24 h-16 bg-cream2 rounded-lg" />
-            )}
-            <div className="flex-1 min-w-[220px]">
-              <div className="text-[10px] uppercase tracking-widest text-terracotta">{b.kind === "slider" ? "Top slider" : "Promo card"} · order {b.sort_order}</div>
-              <div className="font-serif text-xl text-ink" data-testid={`banner-row-title-${b.id}`}>{b.title}</div>
-              <div className="text-sm text-muted2">{b.subtitle}</div>
-              {b.cta_link && <div className="text-xs text-forest mt-1">{b.cta_label || "CTA"} → {b.cta_link}</div>}
+        {!showForm && (
+          <button data-testid="admin-add-banner-btn" onClick={openAdd} className="btn-primary inline-flex items-center gap-2 shrink-0">
+            <Plus size={18} weight="bold" /> Add banner
+          </button>
+        )}
+      </div>
+      <div className={showForm ? "grid lg:grid-cols-[420px,1fr] gap-8 items-start" : ""}>
+        {showForm && (
+          <form onSubmit={submit} className="card-earth p-6 h-fit lg:sticky lg:top-24 space-y-3" data-testid="banner-form">
+            <h3 className="font-serif text-2xl text-ink">{editing ? "Edit banner" : "Add banner"}</h3>
+            <div>
+              <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Placement</label>
+              <select data-testid="banner-kind" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
+                <option value="slider">Top slider (above hero)</option>
+                <option value="promo">Promo card (below hero)</option>
+              </select>
             </div>
-            <span className={`chip ${b.active ? "!bg-forest/10 !text-forest" : "!bg-muted2/10 !text-muted2"}`}>{b.active ? "Active" : "Inactive"}</span>
-            <button data-testid={`banner-toggle-${b.id}`} onClick={() => onToggleActive(b)}
-              className="text-sm rounded-full border border-edge px-3 py-1 hover:bg-cream2">
-              {b.active ? "Deactivate" : "Activate"}
-            </button>
-            <button data-testid={`banner-edit-${b.id}`} onClick={() => startEdit(b)}
-              className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
-            <button data-testid={`banner-delete-${b.id}`} onClick={() => onDelete(b.id)}
-              className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta"><Trash size={16} /></button>
+            <div>
+              <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Title</label>
+              <input data-testid="banner-title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Subtitle</label>
+              <input data-testid="banner-subtitle" value={form.subtitle} onChange={e => setForm({ ...form, subtitle: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+            </div>
+            <MediaUploader
+              kind="image"
+              label="Banner image"
+              value={form.image_url}
+              onChange={(url) => setForm({ ...form, image_url: url })}
+              testId="upload-banner-image"
+              compact
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">CTA label</label>
+                <input data-testid="banner-cta-label" value={form.cta_label} onChange={e => setForm({ ...form, cta_label: e.target.value })}
+                  placeholder="Shop now" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">CTA link</label>
+                <input data-testid="banner-cta-link" value={form.cta_link} onChange={e => setForm({ ...form, cta_link: e.target.value })}
+                  placeholder="/products" className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Sort order</label>
+              <input data-testid="banner-sort" type="number" value={form.sort_order}
+                onChange={e => setForm({ ...form, sort_order: e.target.value })}
+                className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm pt-2">
+              <input data-testid="banner-active" type="checkbox" checked={form.active}
+                onChange={e => setForm({ ...form, active: e.target.checked })} /> Active
+            </label>
+            <div className="flex gap-2 pt-2">
+              <button data-testid="banner-save" className="btn-primary flex-1">{editing ? "Update" : "Add banner"}</button>
+              <button type="button" data-testid="banner-form-cancel" onClick={cancel} className="btn-outline">Cancel</button>
+            </div>
+          </form>
+        )}
+        <div>
+          <div className="space-y-3" data-testid="banner-list">
+            {filtered.length === 0 && (
+              <div className="text-muted2 text-center py-16">
+                {banners.length === 0 ? "No banners yet. Create a slider or promo card for your Home page." : "No banners match your search."}
+              </div>
+            )}
+            {filtered.map(b => {
+              const isDeleting = deletingIds?.has(b.id);
+              return (
+                <div key={b.id} className="card-earth p-4 flex flex-wrap items-center gap-4">
+                  {b.image_url ? (
+                    <img src={resolveMediaUrl(b.image_url)} alt="" className="w-24 h-16 object-cover rounded-lg" />
+                  ) : (
+                    <div className="w-24 h-16 bg-cream2 rounded-lg" />
+                  )}
+                  <div className="flex-1 min-w-[220px]">
+                    <div className="text-[10px] uppercase tracking-widest text-terracotta">{b.kind === "slider" ? "Top slider" : "Promo card"} · order {b.sort_order}</div>
+                    <div className="font-serif text-xl text-ink" data-testid={`banner-row-title-${b.id}`}>{b.title}</div>
+                    <div className="text-sm text-muted2">{b.subtitle}</div>
+                    {b.cta_link && <div className="text-xs text-forest mt-1">{b.cta_label || "CTA"} → {b.cta_link}</div>}
+                  </div>
+                  <span className={`chip ${b.active ? "!bg-forest/10 !text-forest" : "!bg-muted2/10 !text-muted2"}`}>{b.active ? "Active" : "Inactive"}</span>
+                  <button data-testid={`banner-toggle-${b.id}`} onClick={() => onToggleActive(b)}
+                    className="text-sm rounded-full border border-edge px-3 py-1 hover:bg-cream2">
+                    {b.active ? "Deactivate" : "Activate"}
+                  </button>
+                  <button data-testid={`banner-edit-${b.id}`} onClick={() => startEdit(b)}
+                    className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
+                  <button
+                    data-testid={`banner-delete-${b.id}`}
+                    onClick={() => onDelete(b.id)}
+                    disabled={isDeleting}
+                    className="rounded-full border border-edge p-2 hover:bg-cream2 text-terracotta disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash size={16} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
