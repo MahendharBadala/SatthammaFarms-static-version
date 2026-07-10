@@ -5,6 +5,7 @@ import Hero3D from "../components/Hero3D";
 import ProductCard from "../components/ProductCard";
 import { BannerSlider, PromoCards } from "../components/HomeBanners";
 import { useSite } from "../context/SiteContext";
+import { resolveMediaUrl } from "../components/MediaUploader";
 import { motion } from "framer-motion";
 import { Leaf, HandHeart, SunHorizon, Truck, ArrowRight } from "@phosphor-icons/react";
 
@@ -50,12 +51,46 @@ export default function Home() {
               ))}
             </div>
           </motion.div>
-          <div className="relative h-[440px] lg:h-[560px]" data-testid="hero-3d-canvas">
-            <Hero3D />
-            <div className="absolute bottom-6 left-6 card-earth p-4 max-w-[220px] backdrop-blur">
-              <div className="chip mb-2">Live from farm</div>
-              <p className="font-serif text-lg leading-tight text-ink">Today&apos;s harvest: fresh turmeric roots being sun-dried.</p>
-            </div>
+          <div className="relative" data-testid="hero-3d-canvas">
+            {site.live_media_url ? (
+              <div className="relative rounded-3xl overflow-hidden border border-edge bg-cream2">
+                {/* No fixed height and no object-fit cropping here on purpose —
+                    the box takes on whatever aspect ratio the admin's uploaded
+                    photo or video naturally has, instead of forcing every
+                    upload into one fixed frame. */}
+                {site.live_media_kind === "video" ? (
+                  <video
+                    key={site.live_media_url}
+                    src={resolveMediaUrl(site.live_media_url)}
+                    className="w-full h-auto max-h-[560px] block"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    controls
+                    data-testid="live-farm-video"
+                  />
+                ) : (
+                  <img
+                    key={site.live_media_url}
+                    src={resolveMediaUrl(site.live_media_url)}
+                    alt="Live from the farm"
+                    className="w-full h-auto max-h-[560px] object-contain block"
+                    data-testid="live-farm-image"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="h-[440px] lg:h-[560px]">
+                <Hero3D />
+              </div>
+            )}
+            {site.live_caption && (
+              <div className="absolute bottom-6 left-6 card-earth p-4 max-w-[220px] backdrop-blur">
+                <div className="chip mb-2">Live from farm</div>
+                <p className="font-serif text-lg leading-tight text-ink" data-testid="live-farm-caption">{site.live_caption}</p>
+              </div>
+            )}
           </div>
         </div>
       </section>
