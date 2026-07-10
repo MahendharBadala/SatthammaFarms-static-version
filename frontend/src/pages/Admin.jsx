@@ -26,7 +26,17 @@ export default function Admin() {
   const [banners, setBanners] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showProductForm, setShowProductForm] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
   const [form, setForm] = useState(empty);
+  // Tracks ids currently mid-delete so a second click can't fire a duplicate
+  // request against an item that's already gone (was the source of the
+  // "delete sometimes does nothing" glitch).
+  const [deletingIds, setDeletingIds] = useState(new Set());
+  const markDeleting = (id, on) => setDeletingIds(prev => {
+    const next = new Set(prev);
+    on ? next.add(id) : next.delete(id);
+    return next;
+  });
 
   const load = useCallback(async () => {
     const [p, o, s, c, b, si] = await Promise.all([
@@ -67,10 +77,23 @@ export default function Admin() {
   };
 
   const del = async (id) => {
+    if (deletingIds.has(id)) return; // already in flight — ignore extra clicks
     if (!window.confirm("Delete this product?")) return;
-    await axios.delete(`${API}/products/${id}`);
-    toast.success("Deleted");
-    load();
+    markDeleting(id, true);
+    // Optimistic removal so the row disappears immediately, even if the
+    // reload that follows is slow or the request fails silently.
+    const prev = products;
+    setProducts(products.filter(p => p.id !== id));
+    try {
+      await axios.delete(`${API}/products/${id}`);
+      toast.success("Deleted");
+      load();
+    } catch (err) {
+      setProducts(prev); // roll back on failure
+      toast.error(err?.response?.data?.detail || "Failed to delete product");
+    } finally {
+      markDeleting(id, false);
+    }
   };
 
   const stats = [
@@ -87,9 +110,14 @@ export default function Admin() {
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save coupon"); }
   };
   const deleteCoupon = async (id) => {
+    if (deletingIds.has(id)) return;
     if (!window.confirm("Delete this coupon?")) return;
+    markDeleting(id, true);
+    const prev = coupons;
+    setCoupons(coupons.filter(c => c.id !== id)); // optimistic
     try { await axios.delete(`${API}/admin/coupons/${id}`); toast.success("Coupon deleted"); load(); }
-    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    catch (e) { setCoupons(prev); toast.error(e?.response?.data?.detail || "Failed to delete coupon"); }
+    finally { markDeleting(id, false); }
   };
   const toggleCouponActive = async (c) => {
     try {
@@ -110,9 +138,14 @@ export default function Admin() {
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save banner"); }
   };
   const deleteBanner = async (id) => {
+    if (deletingIds.has(id)) return;
     if (!window.confirm("Delete this banner?")) return;
+    markDeleting(id, true);
+    const prev = banners;
+    setBanners(banners.filter(b => b.id !== id)); // optimistic
     try { await axios.delete(`${API}/admin/banners/${id}`); toast.success("Banner deleted"); load(); }
-    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    catch (e) { setBanners(prev); toast.error(e?.response?.data?.detail || "Failed to delete banner"); }
+    finally { markDeleting(id, false); }
   };
   const toggleBannerActive = async (b) => {
     try {
@@ -177,9 +210,17 @@ export default function Admin() {
 
       {tab === "products" && (
         <div className="space-y-6">
-          <div className="flex justify-end">
+          <div className="flex gap-3 items-center flex-wrap">
+            <input
+              data-testid="admin-product-search"
+              type="text"
+              value={productSearch}
+              onChange={e => setProductSearch(e.target.value)}
+              placeholder="Search products by name or category…"
+              className="flex-1 min-w-[220px] px-4 py-2.5 border border-edge rounded-full bg-white focus:outline-none focus:border-forest text-sm"
+            />
             {!showProductForm && (
-              <button data-testid="admin-add-product-btn" onClick={openAdd} className="btn-primary inline-flex items-center gap-2">
+              <button data-testid="admin-add-product-btn" onClick={openAdd} className="btn-primary inline-flex items-center gap-2 shrink-0">
                 <Plus size={18} weight="bold" /> Add product
               </button>
             )}
@@ -187,7 +228,7 @@ export default function Admin() {
           {showProductForm && (
             <ProductForm form={form} setForm={setForm} editing={editing} onSave={save} onCancel={cancel} />
           )}
-          <ProductList products={products} onEdit={startEdit} onDelete={del} />
+          <ProductList products={products} onEdit={startEdit} onDelete={del} deletingIds={deletingIds} search={productSearch} />
         </div>
       )}
       {tab === "orders" && <OrdersTable orders={orders} onUpdateStatus={async (id, status) => {
@@ -197,8 +238,8 @@ export default function Admin() {
           load();
         } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
       }} />}
-      {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} />}
-      {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} />}
+      {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
+      {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} deletingIds={deletingIds} />}
       {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
       {tab === "payments" && <PaymentSettingsPanel settings={settings} onSave={async (payload) => {
         try {
