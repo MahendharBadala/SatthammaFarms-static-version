@@ -52,35 +52,30 @@ export default function Header() {
         {/* Top Row */}
         <div className="flex items-center justify-between">
         {/* Left Side */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
         <button
-          className="md:hidden rounded-full p-1"
+          className="md:hidden rounded-full p-2 hover:bg-cream2 transition"
           onClick={() => setMenuOpen(true)}
         >
         <List size={26} />
       </button>
-
       <Link
         to="/"
         data-testid="nav-home-logo"
         onClick={onLogoClick}
         className="select-none"
       >
-        <Logo />
+        <Logo className="h-10 w-auto" />
       </Link>
-
     </div>
-
     {/* Right Side */}
     <div className="flex items-center gap-2">
-
       <Link
         to="/cart"
         data-testid="nav-cart"
         className="relative rounded-full border border-edge px-3 py-2 hover:bg-cream2 transition-colors"
       >
         <ShoppingBag size={20} weight="duotone" />
-
         {count > 0 && (
           <span
             data-testid="cart-count-badge"
@@ -90,7 +85,6 @@ export default function Header() {
           </span>
         )}
       </Link>
-
       {/* Desktop Admin Buttons */}
       {user?.role === "admin" && (
         <>
@@ -115,7 +109,6 @@ export default function Header() {
       )}
 
     </div>
-
   </div>
 
   {/* Desktop Navigation */}
@@ -128,14 +121,12 @@ export default function Header() {
 
   {/* Mobile Navigation */}
   <div className="md:hidden mt-3 border-t border-edge">
-
     <div className="grid grid-cols-2">
-
       <Link
         to="/"
-        className={`py-3 text-center font-medium transition-all ${
+        className={`py-3 text-center font-medium transition-all duration-300 ${
           loc.pathname === "/"
-            ? "text-forest border-b-[3px] border-forest"
+            ? "text-forest font-semibold border-b-2 border-forest"
             : "text-muted2"
         }`}
       >
@@ -144,20 +135,16 @@ export default function Header() {
 
       <Link
         to="/products"
-        className={`py-3 text-center font-medium transition-all ${
+        className={`py-3 text-center font-semibold transition-all duration-300 ${
           loc.pathname.startsWith("/products")
-            ? "text-forest border-b-[3px] border-forest"
+            ? "text-forest font-semibold border-b-2 border-forest"
             : "text-muted2"
         }`}
       >
         Our Products
       </Link>
-
     </div>
-
   </div>
-
-</div>
         </div>
       </header>
       <AdminLoginModal open={modalOpen} onClose={() => setModalOpen(false)} />
