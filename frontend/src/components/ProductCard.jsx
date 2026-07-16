@@ -20,14 +20,14 @@ export default function ProductCard({ product }) {
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openQuickView(); }}
-        className="card-earth overflow-hidden group flex flex-col cursor-pointer transition-all duration-300 ease-out hover:scale-[1.03] hover:shadow-xl hover:-translate-y-1"
+        className="card-earth overflow-hidden group flex flex-col cursor-pointer transition-all duration-300 ease-out md:hover:scale-[1.03] md:hover:shadow-xl md:hover:-translate-y-1"
       >
-        <div className="block relative aspect-[4/3] overflow-hidden bg-cream2">
+        <div className="relative aspect-square sm:aspect-[4/3] overflow-hidden bg-cream2">
           <img
             src={resolveMediaUrl(product.image_url) || "https://images.unsplash.com/photo-1581600140682-d4e68c8cde32?auto=format&fit=crop&w=1200&q=80"}
             alt={product.name}
             loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-[500ms] ease-out group-hover:scale-105"
           />
           {product.video_url && (
             <div className="absolute top-3 left-3 chip !bg-white/90 !text-forest">
@@ -38,19 +38,19 @@ export default function ProductCard({ product }) {
             <div className="absolute top-3 right-3 chip">Featured</div>
           )}
         </div>
-        <div className="p-5 flex-1 flex flex-col">
-          <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-terracotta">{product.category}</div>
-          <h3 className="mt-1 font-serif text-2xl leading-tight text-ink group-hover:text-forest transition-colors">{product.name}</h3>
-          <p className="mt-2 text-sm text-muted2 line-clamp-2 flex-1">{product.description}</p>
+        <div className="p-3 sm:p-5 flex-1 flex flex-col">
+          <div className="text-[9px] sm:text-[10px] font-bold tracking-[0.2em] uppercase text-terracotta">{product.category}</div>
+          <h3 className="mt-1 font-serif text-lg sm:text-2xl leading-tight text-ink group-hover:text-forest transition-colors">{product.name}</h3>
+          <p className="mt-2 text-xs sm:text-sm text-muted2 line-clamp-2 flex-1">{product.description}</p>
           <div className="mt-4 flex items-end justify-between">
             <div>
-              <div className="font-serif text-2xl text-forest font-semibold">₹{product.price}</div>
-              <div className="text-[11px] text-muted2 -mt-1">per {product.unit}</div>
+              <div className="font-serif text-lg sm:text-2xl text-forest font-semibold">₹{product.price}</div>
+              <div className="text-[10px] sm:text-[11px] text-muted2 -mt-1">per {product.unit}</div>
             </div>
             <button
               data-testid={`add-to-cart-${testId}`}
               onClick={(e) => { e.stopPropagation(); add(product); toast.success(`Added ${product.name} to cart`); }}
-              className="btn-primary !py-2 !px-4 text-sm inline-flex items-center gap-1"
+              className="btn-primary !py-2 !px-3 text-xs sm:text-sm inline-flex items-center gap-1"
             >
               <Plus size={16} weight="bold" /> Cart
             </button>
