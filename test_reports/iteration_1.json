@@ -1,0 +1,36 @@
+{
+  "summary": "First-finish smoke testing of Satthamma Farms MVP. Backend (products, auth, admin CRUD, orders, categories, role checks) and Frontend (home hero + Telugu tagline, products page with 12 cards + filters, add-to-cart badge update, admin login redirect to /admin dashboard with stats) all working. Minor field-name difference in POST /api/orders payload noted (uses address/phone, not shipping_address) — verify frontend Checkout matches.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/products returns 12 seeded products (HTTP 200)",
+    "GET /api/categories returns 7 categories (HTTP 200)",
+    "POST /api/auth/login admin → HTTP 200, role=admin, JWT token issued (field name: 'token')",
+    "GET /api/auth/me with Bearer token → HTTP 200 returns admin profile",
+    "POST /api/auth/register creates customer → HTTP 200, returns token+user",
+    "POST /api/products (admin) creates product → HTTP 200; DELETE /api/products/{id} → HTTP 200",
+    "POST /api/products without token → HTTP 401 (auth guard)",
+    "POST /api/products with customer token → HTTP 403 (role guard)",
+    "POST /api/orders (customer, address+phone+items) → HTTP 200, returns {id,total,status}",
+    "GET /api/admin/users (admin) → HTTP 200",
+    "Home page renders hero, Telugu tagline 'prathiokkari intaa, nanyamaina panta', CTAs, stats",
+    "Header nav (Home, Our Products, Our Story, Contact, Sign in, Cart) visible and functional",
+    "Products page shows 12 product cards with category filter tabs (All/Grains/Pulses/Pickles/Masalas & Spices/Seeds/Cotton/Other) and search input",
+    "Add-to-cart from product card updates cart badge to 1",
+    "Login as admin@satthammafarms.com/Admin@123 redirects to /admin",
+    "Admin dashboard shows stats (12 PRODUCTS, 1 ORDERS, 2 USERS) + tabs Products/Orders/Users + Add product form"
+  ],
+  "failed": [
+    {
+      "area": "backend - orders schema",
+      "issue": "POST /api/orders expects fields 'address' (string) and 'phone' at top level, not 'shipping_address' object. Not a bug per se, but ensure frontend Checkout.jsx sends the matching schema.",
+      "evidence": "422 when sending {shipping_address:{...}}; 200 when sending {items, address, phone}",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Confirm frontend Checkout page posts {items, address, phone} matching backend OrderCreate schema (already testable via UI end-to-end in next pass)."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

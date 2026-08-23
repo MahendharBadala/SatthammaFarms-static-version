@@ -1,0 +1,111 @@
+@import "@fontsource/cormorant-garamond/400.css";
+@import "@fontsource/cormorant-garamond/500.css";
+@import "@fontsource/cormorant-garamond/600.css";
+@import "@fontsource/cormorant-garamond/700.css";
+@import "@fontsource/manrope/300.css";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 33% 96%;
+    --foreground: 0 0% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 17%;
+    --primary: 143 27% 24%;
+    --primary-foreground: 42 33% 96%;
+    --secondary: 40 27% 91%;
+    --secondary-foreground: 143 27% 24%;
+    --muted: 40 20% 92%;
+    --muted-foreground: 40 4% 41%;
+    --accent: 17 51% 53%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 22% 87%;
+    --input: 40 22% 87%;
+    --ring: 143 27% 24%;
+    --radius: 0.75rem;
+  }
+}
+
+* { border-color: hsl(var(--border)); }
+
+html, body, #root { background: #F9F6F0; }
+
+body {
+  margin: 0;
+  font-family: "Manrope", system-ui, sans-serif;
+  color: #2C2C2C;
+  -webkit-font-smoothing: antialiased;
+  background-color: #F9F6F0;
+  background-image:
+    radial-gradient(rgba(44,76,59,0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+h1, h2, h3, h4, .font-serif { font-family: "Cormorant Garamond", serif; }
+
+/* subtle grain overlay */
+.grain::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.18'/></svg>");
+  mix-blend-mode: multiply; opacity: .35;
+}
+
+/* pill button hover */
+.btn-primary {
+  background: #2C4C3B; color: #F9F6F0; border-radius: 9999px;
+  padding: .75rem 1.5rem; font-weight: 600; letter-spacing: .01em;
+  transition: background-color .2s ease, transform .15s ease;
+}
+.btn-primary:hover { background: #1E3629; }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-outline {
+  border: 1px solid #2C4C3B; color: #2C4C3B; border-radius: 9999px;
+  padding: .7rem 1.4rem; font-weight: 600;
+  transition: background-color .2s ease, color .2s ease;
+  background: transparent;
+}
+.btn-outline:hover { background: #2C4C3B; color: #F9F6F0; }
+
+.card-earth {
+  background: #ffffff;
+  border: 1px solid #E5E0D8;
+  border-radius: 1rem;
+  box-shadow: 0 8px 30px rgba(44,76,59,0.06);
+}
+
+.chip {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .3rem .7rem; border-radius: 9999px;
+  font-size: .72rem; letter-spacing: .18em; text-transform: uppercase;
+  background: rgba(197, 104, 75, 0.1); color: #C5684B; font-weight: 700;
+}
+
+.stroke-heading {
+  -webkit-text-stroke: 1px #2C4C3B;
+  color: transparent;
+}
+
+.hero-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: .5;
+  pointer-events: none;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

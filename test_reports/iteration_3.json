@@ -1,0 +1,35 @@
+{
+  "summary": "Round 3 testing for STATIC site conversion (no customer auth, anonymous WhatsApp checkout, site-content editor). Backend: 29/29 pytest tests passed covering (a) admin auth: login returns cookie+token, wrong password 401, /auth/me works, no-token 401; (b) site settings: GET /api/site returns all 14 fields with valid whatsapp_number, PUT /api/admin/site persists (verified via marker in follow-up GET), no-auth PUT returns 401, restore round-trip works; (c) anonymous orders: POST /api/orders with no auth succeeds, empty items returns 400, /api/orders/mine returns 404 (removed), SAVE10 coupon path applies 10% discount + increments coupons.uses, invalid coupon rejected 400, GET /api/admin/orders lists anonymous order with customer_name/phone/pincode/address/items; (d) coupons + banners CRUD regression + role guards; (e) products CRUD + admin status transition to 'confirmed' (new allowed status) + payment_settings public secret guard. Frontend (Playwright): Home page has NO Sign in / My Orders (nav-login absent), only Home/Our Products/Our Story/Contact + cart icon; /login and /orders routes do not render (React Router 'No routes matched' warnings, no login form or MyOrders header); 5 rapid clicks on [data-testid=nav-home-logo] opens [data-testid=admin-login-modal], wrong creds show 'Invalid email or password', admin creds route to /admin with 'Welcome, Satthamma!' toast; Site content tab renders form with all fields including data-testid=site-whatsapp_number, site-hero_badge, etc.; editing hero_badge to 'TEST_MARKER_HERO' and Save propagates to Home immediately after navigation; Anonymous Checkout: form fields (name/phone/pincode/address/notes) fillable, whatsapp-notice card visible with site-driven copy, coupon flow works (invalid → red coupon-error 'Invalid coupon code', SAVE10 → chip + ₹13 discount + ₹117 total), placing order triggers window.open to wa.me/918500812044 popup with prefilled order summary AND navigates to confirmation screen with [data-testid=reopen-whatsapp] whose href starts with 'https://wa.me/918500812044?text=', order-id shown (17412170), cart cleared post-order (no cart-count-badge).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~980 LOC and still mixes 8+ concerns (auth, otp, products, orders, payments, coupons, banners, site, uploads, email). Iteration 2 flagged this — split into routers/*.py + services/*.py to keep it maintainable.",
+    "server.py still uses deprecated @app.on_event('startup'/'shutdown'). Migrate to FastAPI lifespan handlers before removal.",
+    "confirm_payment endpoint (POST /api/orders/{oid}/confirm-payment) still requires Depends(get_current_user) and references order['user_id'] and user['id'] — but with anonymous orders there is no user_id stored, so this endpoint is dead code for the new flow. Remove it (and OrderConfirmIn) or gate to admin-only if it is still needed for legacy paths.",
+    "In create_order, invalid product IDs are silently skipped inside the loop. If none survive, a 400 is raised — good — but there is no explicit response for 'some IDs invalid' vs 'all invalid'; consider raising 400 with names/ids for clarity.",
+    "OrderIn: customer_name defaults to '' — API accepts an order with empty name/pincode. Frontend enforces required, but backend should validate min_length>=1 and 6-digit pincode to avoid junk orders slipping in via direct API calls.",
+    "OTP endpoints (/auth/otp/request, /auth/otp/verify) are still exposed but unused per problem statement. Consider removing to shrink surface area."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@satthammafarms.com / Admin@123 (admin). No customer accounts (anonymous checkout). SAVE10 coupon (10% off, no min) kept active for Home/Checkout regression.",
+  "seed_data_creation": "Test run created + cleaned up TEST_ coupons and TEST slider/promo banners. SAVE10 coupon left active (created if absent). One anonymous order 'TEST Anon UI' was placed via UI checkout and left in the DB (visible in /api/admin/orders — safe to delete). Site settings were restored to defaults after the marker test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/backend_test.py -v` for full backend regression. The backend test file now covers /api/site + anonymous /api/orders + coupon+banner CRUD + regression. UI flow to reach admin: 5 rapid clicks on [data-testid=nav-home-logo] (use click_count=5, delay=50) opens the admin modal. Anonymous checkout uses form fields data-testid=checkout-{name,phone,pincode,address,notes} and coupon-{input,apply,error,applied-code,remove}; place button is [data-testid=checkout-place]; confirmation link [data-testid=reopen-whatsapp] carries the same wa.me URL that window.open popped. If you need to intercept the popup, use `context.on('page', handler)` — verified working here.",
+  "rca of the issue": "N/A — no bugs surfaced. All 29 backend tests pass; the STATIC-site conversion is fully wired end-to-end (site settings live-update, anonymous orders, WhatsApp popup + fallback link, secret 5-click admin unlock)."
+}

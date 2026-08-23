@@ -1,0 +1,38 @@
+{
+  "summary": "Round 2 testing (password toggles, coupons, banners, checkout coupon flow). Backend: 32/32 pytest tests passed covering admin auth, coupon CRUD + validate (percent/flat/inactive/expired/min-order/unknown), non-admin/no-auth guards, banner CRUD + kind filter + only-active public, order-with-coupon (apply, uses increment, invalid rejection, no-coupon path still works), and regression (products CRUD, admin order status update, OTP mock, public payment settings without leaked secret). Frontend: login+register password toggle switches type between password/text and back; admin login routes to /admin; Admin > Coupons tab creates a percent coupon, deactivates then reactivates via toggle, deletes via confirm dialog, all with sonner toasts; Admin > Banners tab renders form/list, toggle deactivate/activate works via UI; Home page renders BannerSlider (2 slides w/ prev/next indicators) and PromoCards when active banners exist; Checkout coupon flow shows red error for invalid code, applies SAVE10, shows applied-coupon chip + discount line + reduced total, and 'Continue to UPI · ₹234' button reflects reduced total; placing the order transitions to the UPI payment panel. Cleanup done: only Fresh harvest slider + TEST Promo Card promo + SAVE10 coupon remain active as requested.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin > Banners (BannerForm)", "issues": ["Banner image input only supports upload — no way to paste an external image URL from the UI. This is deliberate per PR (upload via MediaUploader) but blocks quick banner creation with external images; consider adding a paste-URL fallback field."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add a paste-URL alternative in BannersManager's image field for admins who want to use external images without uploading (image_url is already supported by backend)."
+  ],
+  "critical_code_review_comments": [
+    "Coupon expiry parsing in _evaluate_coupon uses datetime.fromisoformat and compares to timezone-aware now; if an admin saves a naive ISO string (e.g. '2020-01-01T00:00:00' without offset), the comparison will raise TypeError but is silently swallowed by the bare `except Exception: pass`, effectively bypassing expiry. Consider logging or explicitly normalizing to UTC before comparison so misconfigured expiries do not silently allow use.",
+    "server.py is ~930 LOC and mixes auth, product, order, payment, coupon, banner, email, storage, and startup seeding. Split into feature modules (routers/coupons.py, routers/banners.py, services/email.py, services/storage.py) as the file grows.",
+    "Startup uses deprecated @app.on_event('startup') / 'shutdown'. Migrate to FastAPI lifespan handlers (available in current FastAPI) before it is removed.",
+    "In create_order, invalid product IDs are silently skipped (`if not p: continue`) but an empty cart from bad IDs would result in an order with total=0 and no items — should raise HTTP 400 when items_full is empty.",
+    "OrderIn.coupon_code default is '' (empty string), not None — fine, but combined with `payload.coupon_code or ''` this creates two ways of saying 'no coupon'. Prefer Optional[str] = None only, and treat empty string as None."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/__init__.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@satthammafarms.com / Admin@123 (admin). Fresh customers created inline (TEST_/co<timestamp>@test.com / Customer@123). SAVE10 coupon (10% off, no min) left active for Home page.",
+  "seed_data_creation": "Left behind: 1 active slider banner (Fresh harvest — pre-existing), 1 active promo banner (TEST Promo Card — created via API for testing; carries 'TEST' prefix in title, safe to rename), 1 SAVE10 coupon (10% percent, active, min_order 0).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "backend_test.py auto-seeds the customer using unique TEST_ emails and cleans up all TEST_ coupons/banners it creates. To re-run: `pytest /app/backend/tests/backend_test.py -v`. Home page currently expects at least one active slider and one active promo — if next test deactivates them, remember to reactivate. The BannersManager admin UI relies on MediaUploader (upload only, no URL paste); use POST /api/admin/banners with image_url when scripting."
+}

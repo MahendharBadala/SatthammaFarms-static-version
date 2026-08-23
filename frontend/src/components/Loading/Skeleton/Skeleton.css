@@ -1,0 +1,145 @@
+.sf-products-wrapper{
+
+    position:relative;
+
+    min-height:850px;
+
+}
+
+.sf-products-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,1fr);
+
+    gap:12px;
+
+}
+
+@media(min-width:1024px){
+
+.sf-products-grid{
+
+    grid-template-columns:repeat(4,1fr);
+
+    gap:20px;
+
+}
+
+}
+
+.sf-skeleton-card{
+
+    border-radius:22px;
+
+    overflow:hidden;
+
+    background:white;
+
+    border:1px solid #ECECEC;
+
+    box-shadow:0 2px 12px rgba(0,0,0,.05);
+
+}
+
+.sf-skeleton-image{
+
+    aspect-ratio:1/1;
+
+    width:100%;
+
+}
+
+.sf-skeleton-content{
+
+    padding:16px;
+
+}
+
+.sf-line{
+
+    height:12px;
+
+    border-radius:100px;
+
+    margin-bottom:12px;
+
+}
+
+.title{
+
+    width:80%;
+
+}
+
+.short{
+
+    width:55%;
+
+}
+
+.price{
+
+    width:35%;
+
+}
+
+.sf-button{
+
+    margin-top:18px;
+
+    height:42px;
+
+    border-radius:12px;
+
+}
+
+.shimmer{
+
+    position:relative;
+
+    overflow:hidden;
+
+    background:#ececec;
+
+}
+
+.shimmer::after{
+
+    content:"";
+
+    position:absolute;
+
+    top:0;
+
+    left:-150%;
+
+    width:80%;
+
+    height:100%;
+
+    background:linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.65),
+    transparent);
+
+    animation:shimmer 1.3s infinite;
+
+}
+
+@keyframes shimmer{
+
+0%{
+
+left:-150%;
+
+}
+
+100%{
+
+left:150%;
+
+}
+
+}
