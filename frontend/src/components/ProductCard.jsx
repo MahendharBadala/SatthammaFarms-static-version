@@ -80,6 +80,7 @@ export default function ProductCard({ product }) {
       onContextMenu={(e) => e.preventDefault()}
       className="
         card-earth
+        h-full
         overflow-hidden
         group
         flex
@@ -152,13 +153,30 @@ export default function ProductCard({ product }) {
               {product.category}
             </div>
 
-            <h3 className="font-serif text-2xl leading-tight mt-1">
-              {product.name}
+            <h3 className="
+                           mt-1
+                           font-serif
+                           text-lg
+                           sm:text-2xl
+                           leading-tight
+                           text-ink
+                           line-clamp-2
+                           min-h-[3rem]
+                           sm:min-h-[3.75rem]">
+                           {product.name}
             </h3>
 
-            <p className="text-xs mt-1 line-clamp-2 opacity-90">
-              {product.description}
-            </p>
+            <p className="
+                          mt-2
+                          text-xs
+                          sm:text-sm
+                          text-muted2
+                          line-clamp-2
+                          min-h-[2.5rem]
+                          sm:min-h-[2.75rem]
+                          flex-1">
+                         {product.description}
+          </p>
 
             <div className="mt-3 flex items-center gap-2 text-xs font-semibold">
               <Leaf size={15} />
