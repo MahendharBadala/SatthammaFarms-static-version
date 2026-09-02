@@ -39,7 +39,7 @@ export default function Products() {
           <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl mt-2 text-ink">Products</h1>
           <p className="text-muted2 mt-2 max-w-lg">Freshly harvested, hand-cleaned, and packed with care. Choose your favourites.</p>
         </div>
-        <div className="relative w-full md-w-md">
+        <div className="relative w-full md:w-md">
           <MagnifyingGlass size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted2" />
           <input
             data-testid="product-search-input"
