@@ -823,8 +823,272 @@ async def admin_delete_review(
         )
 
     return {"ok": True}
-    
+
+# ---------------- Customer Reviews ----------------
+
+REVIEW_COOLDOWN_SECONDS = 120
+
+
+def review_to_out(doc: dict) -> dict:
+    return {
+        "id": str(doc["_id"]),
+        "product_id": doc.get("product_id", ""),
+        "customer_name": doc.get("customer_name", "Customer"),
+        "rating": int(doc.get("rating", 5)),
+        "review_text": doc.get("review_text", ""),
+        "photo_urls": list(doc.get("photo_urls", []) or []),
+        "status": doc.get("status", "pending"),
+        "admin_response": doc.get("admin_response", ""),
+        "admin_response_date": doc.get("admin_response_date"),
+        "created_at": doc.get("created_at", ""),
+        "updated_at": doc.get("updated_at", ""),
+        "created_by_admin": bool(doc.get("created_by_admin", False)),
+    }
+
+
+@api.post("/reviews")
+async def create_review(
+    payload: ReviewCreateIn,
+    request: Request,
+    response: Response,
+):
+    product_id = (payload.product_id or "").strip()
+
+    # Check product exists
+    try:
+        product = await db.products.find_one(
+            {"_id": ObjectId(product_id)}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product id",
+        ) from exc
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found",
+        )
+
+    # Basic validation
+    customer_name = (payload.customer_name or "Customer").strip()
+    review_text = (payload.review_text or "").strip()
+
+    if not customer_name:
+        customer_name = "Customer"
+
+    photo_urls = [
+        str(url).strip()
+        for url in payload.photo_urls
+        if str(url).strip()
+    ]
+
+    if not review_text and not photo_urls:
+        raise HTTPException(
+            status_code=400,
+            detail="Please write a review or upload at least one photo",
+        )
+
+    if len(photo_urls) > 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 6 photos allowed per review",
+        )
+
+    # Anonymous browser token
+    reviewer_token = request.cookies.get("reviewer_token")
+
+    if not reviewer_token:
+        reviewer_token = str(uuid.uuid4())
+
+    # 2-minute cooldown for customers
+    now = datetime.now(timezone.utc)
+
+    recent_review = await db.review_cooldowns.find_one(
+        {
+            "reviewer_token": reviewer_token,
+            "created_at": {
+                "$gte": now - timedelta(seconds=REVIEW_COOLDOWN_SECONDS)
+            },
+        }
+    )
+
+    if recent_review:
+        created_at = recent_review.get("created_at")
+
+        if created_at:
+            elapsed = (
+                now - created_at
+            ).total_seconds()
+
+            remaining = max(
+                1,
+                int(REVIEW_COOLDOWN_SECONDS - elapsed)
+            )
+
+            minutes = remaining // 60
+            seconds = remaining % 60
+
+            if minutes:
+                wait_message = (
+                    f"Please wait {minutes} minute"
+                    f"{'s' if minutes != 1 else ''} "
+                    f"and {seconds} seconds before submitting "
+                    f"another review."
+                )
+            else:
+                wait_message = (
+                    f"Please wait {seconds} seconds before "
+                    f"submitting another review."
+                )
+
+            response = {
+                "ok": False,
+                "cooldown": True,
+                "remaining_seconds": remaining,
+                "message": wait_message,
+            }
+
+            raise HTTPException(
+                status_code=429,
+                detail=response,
+            )
+
+    # Store review as pending
+    created_at = now.isoformat()
+
+    review_doc = {
+        "product_id": product_id,
+        "customer_id": None,
+        "customer_name": customer_name,
+        "rating": int(payload.rating),
+        "review_text": review_text,
+        "photo_urls": photo_urls,
+        "status": "pending",
+        "admin_response": "",
+        "admin_response_date": None,
+        "created_at": created_at,
+        "updated_at": created_at,
+        "created_by_admin": False,
+    }
+
+    result = await db.reviews.insert_one(review_doc)
+
+    review_doc["_id"] = result.inserted_id
+
+    # Record cooldown
+    await db.review_cooldowns.insert_one(
+        {
+            "reviewer_token": reviewer_token,
+            "created_at": now,
+        }
+    )
+
+    response = {
+        content='{"ok":true}',
+        media_type="application/json",
+}
+
+    response.set_cookie(
+        key="reviewer_token",
+        value=reviewer_token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        max_age=60 * 60 * 24 * 365,
+        path="/",
+    )
+
+    return {
+        "ok": True,
+        "message": (
+            "Thank you! Your review has been submitted "
+            "for approval."
+        ),
+        "review": review_to_out(review_doc),
+    }
+
+# ---------------- Public Product Reviews ----------------
+
+
+@api.get("/products/{pid}/reviews")
+async def get_product_reviews(pid: str):
+    try:
+        product_id = str(ObjectId(pid))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product id",
+        ) from exc
+
+    product = await db.products.find_one(
+        {"_id": ObjectId(product_id)}
+    )
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found",
+        )
+
+    # Only approved reviews are visible to customers.
+    reviews = await db.reviews.find(
+        {
+            "product_id": product_id,
+            "status": "approved",
+        }
+    ).sort(
+        "created_at",
+        -1,
+    ).to_list(500)
+
+    review_list = [
+        review_to_out(review)
+        for review in reviews
+    ]
+
+    review_count = len(review_list)
+
+    # Products with no approved reviews start at 5.0 stars.
+    if review_count == 0:
+        average_rating = 5.0
+    else:
+        total_rating = sum(
+            review["rating"]
+            for review in review_list
+        )
+
+        average_rating = round(
+            total_rating / review_count,
+            1,
+        )
+
+    # Rating distribution.
+    distribution = {
+        "5": 0,
+        "4": 0,
+        "3": 0,
+        "2": 0,
+        "1": 0,
+    }
+
+    for review in review_list:
+        rating = str(review["rating"])
+
+        if rating in distribution:
+            distribution[rating] += 1
+
+    return {
+        "product_id": product_id,
+        "rating": average_rating,
+        "review_count": review_count,
+        "distribution": distribution,
+        "reviews": review_list,
+    }
+
 # --- Orders ---
+
 @api.post("/orders")
 async def create_order(payload: OrderIn, request: Request):
     # Anonymous checkout — no auth required. Order stores customer contact fields.
@@ -1359,6 +1623,305 @@ async def serve_file(file_id: str):
     data, ct = _get_object(rec["storage_path"])
     return Response(content=data, media_type=rec.get("content_type") or ct, headers={"Cache-Control": "public, max-age=86400"})
 
+# ---------------- Customer Review Photo Upload ----------------
+
+MAX_REVIEW_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+REVIEW_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+}
+
+
+@api.post("/reviews/upload")
+async def upload_review_photo(
+    file: UploadFile = File(...),
+):
+    content_type = (file.content_type or "").lower()
+
+    if content_type not in REVIEW_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only JPG, PNG, and WebP images are allowed.",
+        )
+
+    data = await file.read()
+
+    if not data:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded image is empty.",
+        )
+
+    if len(data) > MAX_REVIEW_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Review images must be 10 MB or smaller.",
+        )
+
+    try:
+        result = upload_media(
+            data,
+            filename=file.filename or "review-image",
+            folder="satthamma-farms/reviews/customer",
+        )
+    except Exception as exc:
+        logging.exception("Customer review image upload failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to upload review image.",
+        ) from exc
+
+    url = result.get("secure_url") or result.get("url")
+
+    if not url:
+        raise HTTPException(
+            status_code=502,
+            detail="Cloudinary did not return an image URL.",
+        )
+
+    return {
+        "ok": True,
+        "url": url,
+        "kind": "image",
+    }
+
+# ---------------- Admin Review Management ----------------
+
+_ALLOWED_REVIEW_STATUSES = {
+    "pending",
+    "approved",
+    "rejected",
+}
+
+
+async def _validate_review_product(product_id: str):
+    try:
+        product = await db.products.find_one(
+            {"_id": ObjectId(product_id)}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product id",
+        ) from exc
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found",
+        )
+
+    return product
+
+
+@api.get("/admin/reviews")
+async def admin_list_reviews(
+    status: Optional[str] = None,
+    _admin: dict = Depends(get_admin_user),
+):
+    query = {}
+
+    if status:
+        status = status.strip().lower()
+
+        if status not in _ALLOWED_REVIEW_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid review status",
+            )
+
+        query["status"] = status
+
+    docs = await db.reviews.find(query).sort(
+        "created_at",
+        -1,
+    ).to_list(1000)
+
+    return [review_to_out(doc) for doc in docs]
+
+
+@api.post("/admin/reviews")
+async def admin_create_review(
+    payload: AdminReviewCreateIn,
+    _admin: dict = Depends(get_admin_user),
+):
+    product_id = (payload.product_id or "").strip()
+
+    await _validate_review_product(product_id)
+
+    customer_name = (payload.customer_name or "").strip()
+    review_text = (payload.review_text or "").strip()
+
+    if not customer_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Customer name is required",
+        )
+
+    status = (payload.status or "approved").strip().lower()
+
+    if status not in _ALLOWED_REVIEW_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid review status",
+        )
+
+    photo_urls = [
+        str(url).strip()
+        for url in payload.photo_urls
+        if str(url).strip()
+    ]
+
+    if len(photo_urls) > 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 6 photos allowed per review",
+        )
+
+    if not review_text and not photo_urls:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide review text or at least one photo",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    admin_response = (
+        (payload.admin_response or "").strip()
+    )
+
+    review_doc = {
+        "product_id": product_id,
+        "customer_id": None,
+        "customer_name": customer_name,
+        "rating": int(payload.rating),
+        "review_text": review_text,
+        "photo_urls": photo_urls,
+        "status": status,
+        "admin_response": admin_response,
+        "admin_response_date": (
+            now if admin_response else None
+        ),
+        "created_at": now,
+        "updated_at": now,
+        "created_by_admin": True,
+    }
+
+    result = await db.reviews.insert_one(review_doc)
+
+    review_doc["_id"] = result.inserted_id
+
+    return {
+        "ok": True,
+        "review": review_to_out(review_doc),
+    }
+
+
+@api.put("/admin/reviews/{rid}")
+async def admin_update_review(
+    rid: str,
+    payload: AdminReviewUpdateIn,
+    _admin: dict = Depends(get_admin_user),
+):
+    try:
+        review_id = ObjectId(rid)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid review id",
+        ) from exc
+
+    review = await db.reviews.find_one(
+        {"_id": review_id}
+    )
+
+    if not review:
+        raise HTTPException(
+            status_code=404,
+            detail="Review not found",
+        )
+
+    update_data = {}
+
+    if payload.status is not None:
+        status = payload.status.strip().lower()
+
+        if status not in _ALLOWED_REVIEW_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid review status",
+            )
+
+        update_data["status"] = status
+
+    if payload.admin_response is not None:
+        admin_response = payload.admin_response.strip()
+
+        update_data["admin_response"] = admin_response
+
+        if admin_response:
+            update_data["admin_response_date"] = (
+                datetime.now(timezone.utc).isoformat()
+            )
+        else:
+            update_data["admin_response_date"] = None
+
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No changes provided",
+        )
+
+    update_data["updated_at"] = (
+        datetime.now(timezone.utc).isoformat()
+    )
+
+    await db.reviews.update_one(
+        {"_id": review_id},
+        {"$set": update_data},
+    )
+
+    updated_review = await db.reviews.find_one(
+        {"_id": review_id}
+    )
+
+    return {
+        "ok": True,
+        "review": review_to_out(updated_review),
+    }
+
+
+@api.delete("/admin/reviews/{rid}")
+async def admin_delete_review(
+    rid: str,
+    _admin: dict = Depends(get_admin_user),
+):
+    try:
+        review_id = ObjectId(rid)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid review id",
+        ) from exc
+
+    result = await db.reviews.delete_one(
+        {"_id": review_id}
+    )
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Review not found",
+        )
+
+    return {
+        "ok": True,
+        "message": "Review deleted",
+    }
+
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def on_startup():
@@ -1369,9 +1932,13 @@ async def on_startup():
     # OTP TTL cleanup: docs auto-purged 15 min after creation
     await db.otp_codes.create_index("created_at")
 
-        # Reviews indexes
+    # Reviews indexes
     await db.reviews.create_index(
         [("product_id", 1), ("status", 1), ("created_at", -1)]
+    )
+
+    await db.review_cooldowns.create_index(
+        [("reviewer_token", 1), ("created_at", -1)]
     )
 
     # One review per customer per product
