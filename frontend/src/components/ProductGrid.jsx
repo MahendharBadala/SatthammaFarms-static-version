@@ -41,6 +41,7 @@ export default function ProductGrid({ loading, products }) {
         md:grid-cols-4
         gap-3
         md:gap-5
+        items-stretch
       "
       initial="hidden"
       animate="show"
@@ -51,6 +52,7 @@ export default function ProductGrid({ loading, products }) {
         return (
           <motion.div
             key={product.id}
+            className="h-full"
             initial={{
               opacity: 0,
               y: 18,
