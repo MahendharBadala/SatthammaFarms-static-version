@@ -122,7 +122,8 @@ class OrderStatusIn(BaseModel):
 
 class ReviewCreateIn(BaseModel):
     product_id: str
-    rating: int = Field(..., ge=1, le=5)
+    customer_name: str = Field(default="Customer", max_length=100)
+    rating: int = Field(default=5, ge=1, le=5)
     review_text: str = Field(default="", max_length=2000)
     photo_urls: List[str] = Field(default_factory=list)
 
