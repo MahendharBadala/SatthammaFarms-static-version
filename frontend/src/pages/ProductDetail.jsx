@@ -136,17 +136,6 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
     if (media.length <= 1) return;
 
     const current = media[activeIndex];
-    
-    const averageRating = reviewsData?.rating ?? 5.0;
-    const reviewCount = reviewsData?.review_count ?? 0;
-    const reviewList = reviewsData?.reviews ?? [];
-    const reviewDistribution = reviewsData?.distribution ?? {
-      "5": 0,
-      "4": 0,
-      "3": 0,
-      "2": 0,
-      "1": 0,
-    };
 
     // Give videos more time; images change automatically every 4.5 sec.
     const delay = current?.type === "video" ? 7000 : 4500;
@@ -196,6 +185,16 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   const currentMedia = media[activeIndex];
 
+    const averageRating = reviewsData?.rating ?? 5.0;
+    const reviewCount = reviewsData?.review_count ?? 0;
+    const reviewList = reviewsData?.reviews ?? [];
+    const reviewDistribution = reviewsData?.distribution ?? {
+      "5": 0,
+      "4": 0,
+      "3": 0,
+      "2": 0,
+      "1": 0,
+    };
     const handleReviewPhotoChange = async (event) => {
     const files = Array.from(event.target.files || []);
 
