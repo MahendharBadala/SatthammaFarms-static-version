@@ -576,10 +576,10 @@ async def create_review(
             detail="Please write a review or upload at least one photo",
         )
 
-    if len(photo_urls) > 6:
+    if len(photo_urls) > 4:
         raise HTTPException(
             status_code=400,
-            detail="Maximum 6 photos allowed per review",
+            detail="Maximum 4 photos allowed per review",
         )
 
     existing = await db.reviews.find_one(
