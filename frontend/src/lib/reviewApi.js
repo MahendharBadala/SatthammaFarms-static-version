@@ -8,6 +8,9 @@ export async function fetchProductReviews(productId) {
     `${API}/products/${productId}/reviews`,
     {
       withCredentials: true,
+      headers: {
+        Authorization: undefined,
+      },
     }
   );
 
@@ -24,6 +27,9 @@ export async function uploadReviewPhoto(file) {
     formData,
     {
       withCredentials: true,
+      headers: {
+        Authorization: undefined,
+      },
     }
   );
 
@@ -37,6 +43,9 @@ export async function submitReview(review) {
     review,
     {
       withCredentials: true,
+      headers: {
+        Authorization: undefined,
+      },
     }
   );
 
