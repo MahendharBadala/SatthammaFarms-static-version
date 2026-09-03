@@ -985,11 +985,6 @@ async def create_review(
         }
     )
 
-    response = {
-        content='{"ok":true}',
-        media_type="application/json",
-}
-
     response.set_cookie(
         key="reviewer_token",
         value=reviewer_token,
