@@ -548,10 +548,13 @@ async def get_product_reviews(pid: str):
 
 # ---------- Customer: submit review ----------
 
+REVIEW_COOLDOWN_SECONDS = 120
+
 @api.post("/reviews")
 async def create_review(
     payload: ReviewCreateIn,
-    user: dict = Depends(get_current_user),
+    request: Request,
+    response: Response,
 ):
     product_id = (payload.product_id or "").strip()
 
@@ -563,7 +566,12 @@ async def create_review(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    customer_name = (payload.customer_name or "Customer").strip()
     review_text = (payload.review_text or "").strip()
+
+    if not customer_name:
+        customer_name = "Customer"
+
     photo_urls = [
         str(url).strip()
         for url in payload.photo_urls
@@ -582,44 +590,102 @@ async def create_review(
             detail="Maximum 4 photos allowed per review",
         )
 
-    existing = await db.reviews.find_one(
+    # Anonymous browser-based cooldown.
+    # Customers do NOT need to log in to submit a review.
+    reviewer_token = request.cookies.get("reviewer_token")
+
+    if not reviewer_token:
+        reviewer_token = str(uuid.uuid4())
+
+    now = datetime.now(timezone.utc)
+
+    recent_review = await db.review_cooldowns.find_one(
         {
-            "product_id": product_id,
-            "customer_id": user["id"],
+            "reviewer_token": reviewer_token,
+            "created_at": {
+                "$gte": now - timedelta(seconds=REVIEW_COOLDOWN_SECONDS)
+            },
         }
     )
 
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="You have already reviewed this product",
-        )
+    if recent_review:
+        created_at = recent_review.get("created_at")
 
-    now = datetime.now(timezone.utc).isoformat()
+        if created_at:
+            elapsed = (now - created_at).total_seconds()
+            remaining = max(
+                1,
+                int(REVIEW_COOLDOWN_SECONDS - elapsed),
+            )
+
+            minutes = remaining // 60
+            seconds = remaining % 60
+
+            if minutes:
+                wait_message = (
+                    f"Please wait {minutes} minute"
+                    f"{'s' if minutes != 1 else ''} "
+                    f"and {seconds} seconds before submitting another review."
+                )
+            else:
+                wait_message = (
+                    f"Please wait {seconds} seconds before submitting another review."
+                )
+
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "ok": False,
+                    "cooldown": True,
+                    "remaining_seconds": remaining,
+                    "message": wait_message,
+                },
+            )
+
+    created_at = now.isoformat()
 
     doc = {
         "product_id": product_id,
-        "customer_id": user["id"],
-        "customer_name": user.get("name", "Customer"),
+        "customer_id": None,
+        "customer_name": customer_name,
         "rating": int(payload.rating),
         "review_text": review_text,
         "photo_urls": photo_urls,
         "status": "pending",
         "admin_response": "",
         "admin_response_date": None,
-        "created_at": now,
-        "updated_at": now,
+        "created_at": created_at,
+        "updated_at": created_at,
+        "created_by_admin": False,
     }
 
     result = await db.reviews.insert_one(doc)
     doc["_id"] = result.inserted_id
+
+    # Start the 2-minute cooldown after successful submission.
+    await db.review_cooldowns.insert_one(
+        {
+            "reviewer_token": reviewer_token,
+            "created_at": now,
+        }
+    )
+
+    # Remember this browser.
+    response.set_cookie(
+        key="reviewer_token",
+        value=reviewer_token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        max_age=60 * 60 * 24 * 365,
+        path="/",
+    )
 
     return {
         "ok": True,
         "message": "Thank you! Your review has been submitted for approval.",
         "review": review_to_out(doc),
     }
-
 
 # ---------- Customer: upload review photo ----------
 
