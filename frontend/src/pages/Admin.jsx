@@ -164,14 +164,15 @@ export default function Admin() {
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save"); }
   };
 
-  const tabs = [
-    { k: "products", label: "Products" },
-    { k: "orders", label: "Orders" },
-    { k: "coupons", label: "Coupons" },
-    { k: "banners", label: "Banners" },
-    { k: "site", label: "Site content" },
-    { k: "payments", label: "Payments" },
-  ];
+ const tabs = [
+  { k: "products", label: "Products" },
+  { k: "orders", label: "Orders" },
+  { k: "reviews", label: "Reviews" },
+  { k: "coupons", label: "Coupons" },
+  { k: "banners", label: "Banners" },
+  { k: "site", label: "Site content" },
+  { k: "payments", label: "Payments" },
+];
 
   return (
     <div className="container mx-auto py-12">
