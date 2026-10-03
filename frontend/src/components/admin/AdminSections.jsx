@@ -644,4 +644,229 @@ export function BannersManager({ banners, onSave, onDelete, onToggleActive, dele
       </div>
     </div>
   );
+  // ---------------- Reviews ----------------
+
+export function ReviewsManager({
+  reviews = [],
+  onApprove,
+  onReject,
+  onDelete,
+  onRespond,
+}) {
+  const [filter, setFilter] = React.useState("pending");
+  const [responseId, setResponseId] = React.useState(null);
+  const [responseText, setResponseText] = React.useState("");
+
+  const filteredReviews = reviews.filter((review) => {
+    if (filter === "all") return true;
+    return review.status === filter;
+  });
+
+  const submitResponse = (reviewId) => {
+    const text = responseText.trim();
+
+    if (!text) return;
+
+    onRespond(reviewId, text);
+
+    setResponseText("");
+    setResponseId(null);
+  };
+
+  return (
+    <div data-testid="admin-reviews">
+
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap mb-5">
+        {["pending", "approved", "rejected", "all"].map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => setFilter(status)}
+            className={`rounded-full px-4 py-2 text-sm border ${
+              filter === status
+                ? "bg-forest text-white border-forest"
+                : "border-edge bg-white text-muted2 hover:bg-cream2"
+            }`}
+          >
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Reviews */}
+      <div className="space-y-4">
+
+        {filteredReviews.length === 0 && (
+          <div className="text-muted2 text-center py-16 card-earth">
+            No {filter === "all" ? "" : filter} reviews.
+          </div>
+        )}
+
+        {filteredReviews.map((review) => (
+          <div
+            key={review.id}
+            className="card-earth p-5"
+          >
+
+            {/* Header */}
+            <div className="flex justify-between items-start gap-4 flex-wrap">
+
+              <div>
+                <div className="font-serif text-xl text-ink">
+                  {review.customer_name || "Customer"}
+                </div>
+
+                <div className="text-sm text-muted2 mt-1">
+                  {review.created_at
+                    ? new Date(review.created_at).toLocaleString()
+                    : ""}
+                </div>
+              </div>
+
+              <span
+                className={`chip ${
+                  review.status === "approved"
+                    ? "!bg-forest/10 !text-forest"
+                    : review.status === "rejected"
+                    ? "!bg-terracotta/10 !text-terracotta"
+                    : "!bg-yellow-100 !text-yellow-800"
+                }`}
+              >
+                {review.status}
+              </span>
+
+            </div>
+
+            {/* Rating */}
+            <div className="mt-3 text-lg tracking-wide">
+              {"★".repeat(Number(review.rating || 0))}
+              <span className="text-muted2">
+                {"★".repeat(5 - Number(review.rating || 0))}
+              </span>
+            </div>
+
+            {/* Review text */}
+            {review.review_text && (
+              <p className="mt-3 text-sm text-ink whitespace-pre-wrap">
+                {review.review_text}
+              </p>
+            )}
+
+            {/* Photos */}
+            {review.photo_urls?.length > 0 && (
+              <div className="flex flex-wrap gap-3 mt-4">
+                {review.photo_urls.map((url, index) => (
+                  <img
+                    key={`${url}-${index}`}
+                    src={url}
+                    alt={`Review ${index + 1}`}
+                    className="w-24 h-24 object-cover rounded-lg border border-edge"
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Admin response */}
+            {review.admin_response && (
+              <div className="mt-4 rounded-lg bg-cream2 p-4">
+                <div className="text-xs font-semibold uppercase tracking-widest text-forest">
+                  Admin response
+                </div>
+
+                <p className="text-sm text-ink mt-1 whitespace-pre-wrap">
+                  {review.admin_response}
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2 mt-5">
+
+              {review.status !== "approved" && (
+                <button
+                  type="button"
+                  onClick={() => onApprove(review.id)}
+                  className="btn-primary"
+                >
+                  Approve
+                </button>
+              )}
+
+              {review.status !== "rejected" && (
+                <button
+                  type="button"
+                  onClick={() => onReject(review.id)}
+                  className="btn-outline"
+                >
+                  Reject
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setResponseId(review.id);
+                  setResponseText(review.admin_response || "");
+                }}
+                className="btn-outline"
+              >
+                Respond
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onDelete(review.id)}
+                className="rounded-full border border-edge px-4 py-2 text-sm text-terracotta hover:bg-cream2"
+              >
+                Delete
+              </button>
+
+            </div>
+
+            {/* Response box */}
+            {responseId === review.id && (
+              <div className="mt-4 border-t border-edge pt-4">
+
+                <textarea
+                  value={responseText}
+                  onChange={(e) => setResponseText(e.target.value)}
+                  rows="3"
+                  placeholder="Write your response to the customer..."
+                  className="w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest"
+                />
+
+                <div className="flex gap-2 mt-2">
+
+                  <button
+                    type="button"
+                    onClick={() => submitResponse(review.id)}
+                    className="btn-primary"
+                  >
+                    Save response
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResponseId(null);
+                      setResponseText("");
+                    }}
+                    className="btn-outline"
+                  >
+                    Cancel
+                  </button>
+
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        ))}
+
+      </div>
+    </div>
+  );
+}
 }
