@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ShoppingBag, Package, Tag, Plus, SignOut } from "@phosphor-icons/react";
 import {
   ProductForm, ProductList, OrdersTable, PaymentSettingsPanel,
-  CouponsManager, BannersManager, SiteSettingsPanel,
+  CouponsManager, BannersManager, SiteSettingsPanel,ReviewsManager,
 } from "../components/admin/AdminSections";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -239,6 +239,15 @@ export default function Admin() {
           load();
         } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
       }} />}
+      {tab === "reviews" && (
+  <ReviewsManager
+    reviews={[]}
+    onApprove={() => {}}
+    onReject={() => {}}
+    onDelete={() => {}}
+    onRespond={() => {}}
+  />
+)}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
       {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} deletingIds={deletingIds} />}
       {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
