@@ -6,8 +6,14 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ShoppingBag, Package, Tag, Plus, SignOut } from "@phosphor-icons/react";
 import {
-  ProductForm, ProductList, OrdersTable, PaymentSettingsPanel,
-  CouponsManager, BannersManager, SiteSettingsPanel,ReviewsManager,
+  ProductForm,
+  ProductList,
+  OrdersTable,
+  PaymentSettingsPanel,
+  CouponsManager,
+  BannersManager,
+  SiteSettingsPanel,
+  ReviewsManager,
 } from "../components/admin/AdminSections";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -239,14 +245,17 @@ export default function Admin() {
           load();
         } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
       }} />}
-      {tab === "reviews" && 
-         <ReviewsManager
-           reviews={[]}
-           onApprove={() => {}}
-           onReject={() => {}}
-           onDelete={() => {}}
-           onRespond={() => {}}
-        />}
+     {tab === "reviews" && (
+  <div className="card-earth p-6">
+    <h2 className="font-serif text-2xl text-ink">
+      REVIEWS TEST
+    </h2>
+
+    <p className="text-muted2 mt-2">
+      The Reviews tab is rendering correctly.
+    </p>
+  </div>
+)}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
       {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} deletingIds={deletingIds} />}
       {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
