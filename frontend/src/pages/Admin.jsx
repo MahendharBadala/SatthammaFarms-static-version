@@ -239,15 +239,14 @@ export default function Admin() {
           load();
         } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
       }} />}
-      {tab === "reviews" && (
-  <ReviewsManager
-    reviews={[]}
-    onApprove={() => {}}
-    onReject={() => {}}
-    onDelete={() => {}}
-    onRespond={() => {}}
-  />
-)}
+      {tab === "reviews" && 
+         <ReviewsManager
+           reviews={[]}
+           onApprove={() => {}}
+           onReject={() => {}}
+           onDelete={() => {}}
+           onRespond={() => {}}
+        />}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
       {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} deletingIds={deletingIds} />}
       {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
