@@ -74,6 +74,60 @@ export default function Admin() {
    setReviews(r);
   }, []);
 
+  const handleApproveReview = async (reviewId) => {
+  try {
+    await approveReview(reviewId);
+    toast.success("Review approved");
+    await load();
+  } catch (err) {
+    toast.error(
+      err?.response?.data?.detail || "Failed to approve review"
+    );
+  }
+};
+
+  const handleRejectReview = async (reviewId) => {
+  try {
+    await rejectReview(reviewId);
+    toast.success("Review rejected");
+    await load();
+  } catch (err) {
+    toast.error(
+      err?.response?.data?.detail || "Failed to reject review"
+    );
+  }
+};
+
+  const handleDeleteReview = async (reviewId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to permanently delete this review?"
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteReview(reviewId);
+    toast.success("Review deleted");
+    await load();
+  } catch (err) {
+    toast.error(
+      err?.response?.data?.detail || "Failed to delete review"
+    );
+  }
+};
+
+  const handleRespondToReview = async (reviewId, response) => {
+  try {
+    await respondToReview(reviewId, response);
+    toast.success("Response saved");
+    await load();
+  } catch (err) {
+    toast.error(
+      err?.response?.data?.detail || "Failed to save response"
+    );
+  }
+};
+  
   useEffect(() => { if (user?.role === "admin") load(); }, [user, load]);
 
   if (loading) return <div className="container mx-auto py-20 text-center text-muted2">Loading...</div>;
@@ -265,10 +319,10 @@ export default function Admin() {
     {tab === "reviews" && (
   <ReviewsManager
     reviews={reviews}
-    onApprove={() => {}}
-    onReject={() => {}}
-    onDelete={() => {}}
-    onRespond={() => {}}
+    onApprove={handleApproveReview}
+    onReject={handleRejectReview}
+    onDelete={handleDeleteReview}
+    onRespond={handleRespondToReview}
   />
 )}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
