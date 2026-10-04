@@ -80,39 +80,62 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
   
 // NEW: reviews useEffect
   
-    useEffect(() => {
-    let cancelled = false;
+    const refreshReviews = async () => {
+  try {
+    setReviewError("");
 
+    const data = await fetchProductReviews(id);
+    setReviewsData(data);
+
+    return data;
+  } catch (err) {
+    console.error("Product reviews error:", err);
+
+    setReviewError(
+      err?.response?.data?.detail ||
+      "Unable to load reviews."
+    );
+
+    throw err;
+  }
+};
+
+useEffect(() => {
+  let cancelled = false;
+
+  const loadReviews = async () => {
     setReviewLoading(true);
     setReviewError("");
     setReviewsData(null);
 
-    fetchProductReviews(id)
-      .then((data) => {
-        if (cancelled) return;
+    try {
+      const data = await fetchProductReviews(id);
+
+      if (!cancelled) {
         setReviewsData(data);
-      })
-      .catch((err) => {
-        if (cancelled) return;
+      }
+    } catch (err) {
+      if (cancelled) return;
 
-        console.error("Product reviews error:", err);
+      console.error("Product reviews error:", err);
 
-        setReviewError(
-          err?.response?.data?.detail ||
-          "Unable to load reviews."
-        );
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setReviewLoading(false);
-        }
-      });
+      setReviewError(
+        err?.response?.data?.detail ||
+        "Unable to load reviews."
+      );
+    } finally {
+      if (!cancelled) {
+        setReviewLoading(false);
+      }
+    }
+  };
 
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
+  loadReviews();
 
+  return () => {
+    cancelled = true;
+  };
+}, [id]);
   const media = useMemo(() => {
     if (!product) return [];
 
@@ -185,16 +208,34 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   const currentMedia = media[activeIndex];
 
-    const averageRating = reviewsData?.rating ?? 5.0;
-    const reviewCount = reviewsData?.review_count ?? 0;
     const reviewList = reviewsData?.reviews ?? [];
-    const reviewDistribution = reviewsData?.distribution ?? {
-      "5": 0,
-      "4": 0,
-      "3": 0,
-      "2": 0,
-      "1": 0,
-    };
+
+// Always calculate the visible review count from the reviews
+// actually returned to the customer.
+const reviewCount = reviewList.length;
+
+// Calculate the average from approved reviews displayed on this page.
+// If there are no reviews, keep the default rating at 5.0.
+const averageRating =
+  reviewCount > 0
+    ? Number(
+        (
+          reviewList.reduce(
+            (total, review) => total + Number(review.rating || 0),
+            0
+          ) / reviewCount
+        ).toFixed(1)
+      )
+    : 5.0;
+
+// Calculate rating distribution from the visible approved reviews.
+const reviewDistribution = {
+  "5": reviewList.filter((review) => Number(review.rating) === 5).length,
+  "4": reviewList.filter((review) => Number(review.rating) === 4).length,
+  "3": reviewList.filter((review) => Number(review.rating) === 3).length,
+  "2": reviewList.filter((review) => Number(review.rating) === 2).length,
+  "1": reviewList.filter((review) => Number(review.rating) === 1).length,
+};
     const handleReviewPhotoChange = async (event) => {
     const files = Array.from(event.target.files || []);
 
@@ -579,24 +620,91 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
       {/* Reviews Section */}
 <section className="mt-10 border-t pt-8">
-  <div className="flex items-center justify-between gap-4 mb-6">
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900">
-        Customer Reviews
-      </h2>
+  {/* Reviews Header */}
+  <div className="mb-6">
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+          Customer Reviews
+        </h2>
 
-      <div className="flex items-center gap-2 mt-2">
-        <span className="text-yellow-500 text-xl">
-          {"★".repeat(Math.round(averageRating))}
+        <p className="text-sm text-gray-500 mt-1">
+          What our customers say about this product
+        </p>
+      </div>
+
+      <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-full bg-green-50 border border-green-100">
+        <span className="text-green-600 text-sm">✓</span>
+        <span className="text-xs font-medium text-green-700">
+          Verified customer feedback
         </span>
+      </div>
+    </div>
+  </div>
 
-        <span className="font-semibold text-gray-900">
+  {/* Rating Summary */}
+  <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+    <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-5 sm:gap-8 items-center">
+
+      {/* Average Rating */}
+      <div className="text-center sm:border-r sm:border-gray-100 sm:pr-8">
+        <div className="text-4xl sm:text-5xl font-bold text-gray-900 leading-none">
           {averageRating.toFixed(1)}
-        </span>
+        </div>
 
-        <span className="text-gray-500">
-          ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})
-        </span>
+        <div className="flex justify-center gap-0.5 mt-2 text-lg">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <span
+              key={star}
+              className={
+                star <= Math.round(averageRating)
+                  ? "text-yellow-400"
+                  : "text-gray-200"
+              }
+            >
+              ★
+            </span>
+          ))}
+        </div>
+
+        <p className="text-xs text-gray-500 mt-1">
+          {reviewCount}{" "}
+          {reviewCount === 1 ? "customer review" : "customer reviews"}
+        </p>
+      </div>
+
+      {/* Rating Distribution */}
+      <div className="space-y-2.5">
+        {[5, 4, 3, 2, 1].map((star) => {
+          const count = reviewDistribution[String(star)] || 0;
+
+          const percentage =
+            reviewCount > 0
+              ? Math.round((count / reviewCount) * 100)
+              : 0;
+
+          return (
+            <div
+              key={star}
+              className="flex items-center gap-2 text-sm"
+            >
+              <span className="w-7 text-gray-600 font-medium">
+                {star}★
+              </span>
+
+              <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-yellow-400 transition-all duration-500"
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+
+              <span className="w-8 text-right text-xs text-gray-400">
+                {count}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   </div>
@@ -614,233 +722,290 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
       No customer reviews yet. Be the first to review this product!
     </div>
   ) : (
-    <div className="space-y-5">
-      {reviewList.map((review) => (
-        <div
-          key={review.id}
-          className="border rounded-xl p-5 bg-white"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold text-gray-900">
-                {review.customer_name}
-              </p>
-
-              <div className="text-yellow-500 mt-1">
-                {"★".repeat(review.rating)}
-                {"☆".repeat(5 - review.rating)}
-              </div>
-            </div>
-
-            <span className="text-sm text-gray-400">
-              {review.created_at
-                ? new Date(review.created_at).toLocaleDateString()
-                : ""}
+    <div className="space-y-3">
+  {reviewList.map((review) => (
+    <article
+      key={review.id}
+      className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow duration-200"
+    >
+      {/* Review Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Customer Avatar */}
+          <div className="w-10 h-10 shrink-0 rounded-full bg-green-100 flex items-center justify-center">
+            <span className="text-sm font-bold text-green-700">
+              {(review.customer_name || "C").charAt(0).toUpperCase()}
             </span>
           </div>
 
-          {review.review_text && (
-            <p className="mt-3 text-gray-700 whitespace-pre-wrap">
-              {review.review_text}
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-900 truncate">
+              {review.customer_name || "Customer"}
             </p>
-          )}
 
-          {review.photo_urls?.length > 0 && (
-            <div className="flex flex-wrap gap-3 mt-4">
-              {review.photo_urls.map((photo, index) => (
-                <img
-                  key={`${review.id}-photo-${index}`}
-                  src={photo}
-                  alt={`Customer review ${index + 1}`}
-                  className="w-24 h-24 object-cover rounded-lg border"
-                />
-              ))}
-            </div>
-          )}
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-yellow-400 text-sm tracking-tight">
+                {"★".repeat(Number(review.rating || 0))}
+              </span>
 
-          {review.admin_response && (
-            <div className="mt-4 rounded-lg bg-gray-50 p-4">
-              <p className="font-semibold text-gray-800">
-                Satthamma Farms
-              </p>
-              <p className="mt-1 text-gray-600 whitespace-pre-wrap">
-                {review.admin_response}
-              </p>
+              <span className="text-xs text-gray-400">
+                {Number(review.rating || 0)}.0
+              </span>
             </div>
-          )}
+          </div>
         </div>
-      ))}
-    </div>
-  )}
 
-  {/* Write a Review */}
-<div className="mt-10 rounded-2xl border bg-gray-50 p-5 sm:p-6">
-  <h3 className="text-xl font-bold text-gray-900">
-    Write a Review
-  </h3>
-
-  <p className="mt-1 text-sm text-gray-500">
-    Share your experience with this product.
-  </p>
-
-  <form
-    onSubmit={handleSubmitReview}
-    className="mt-6 space-y-5"
-  >
-    {/* Customer Name */}
-    <div>
-      <label
-        htmlFor="review-name"
-        className="mb-2 block text-sm font-semibold text-gray-700"
-      >
-        Your Name
-      </label>
-
-      <input
-        id="review-name"
-        type="text"
-        value={reviewName}
-        onChange={(e) => setReviewName(e.target.value)}
-        placeholder="Enter your name"
-        maxLength={100}
-        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
-      />
-    </div>
-
-    {/* Rating */}
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-gray-700">
-        Your Rating
-      </label>
-
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => setReviewRating(star)}
-            aria-label={`Rate ${star} out of 5`}
-            className="text-3xl leading-none transition-transform hover:scale-110"
-          >
-            <span
-              className={
-                star <= reviewRating
-                  ? "text-yellow-500"
-                  : "text-gray-300"
-              }
-            >
-              ★
-            </span>
-          </button>
-        ))}
-
-        <span className="ml-2 text-sm font-medium text-gray-600">
-          {reviewRating}/5
+        {/* Date */}
+        <span className="shrink-0 text-xs text-gray-400 pt-1">
+          {review.created_at
+            ? new Date(review.created_at).toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : ""}
         </span>
       </div>
-    </div>
 
-    {/* Review Text */}
-    <div>
-      <label
-        htmlFor="review-text"
-        className="mb-2 block text-sm font-semibold text-gray-700"
-      >
-        Your Review
-      </label>
+      {/* Review Text */}
+      {review.review_text && (
+        <p className="mt-3 text-sm sm:text-[15px] leading-6 text-gray-700 whitespace-pre-wrap">
+          {review.review_text}
+        </p>
+      )}
 
-      <textarea
-        id="review-text"
-        value={reviewText}
-        onChange={(e) => setReviewText(e.target.value)}
-        placeholder="Tell us about your experience..."
-        maxLength={2000}
-        rows={5}
-        className="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100"
-      />
-
-      <div className="mt-1 text-right text-xs text-gray-400">
-        {reviewText.length}/2000
-      </div>
-    </div>
-
-    {/* Photos */}
-    <div>
-      <label
-        htmlFor="review-photos"
-        className="mb-2 block text-sm font-semibold text-gray-700"
-      >
-        Add Photos <span className="font-normal text-gray-400">(optional)</span>
-      </label>
-
-      <input
-        id="review-photos"
-        type="file"
-        accept="image/jpeg,image/jpg,image/png,image/webp"
-        multiple
-        onChange={handleReviewPhotoChange}
-        disabled={reviewPhotos.length >= 4}
-        className="block w-full cursor-pointer rounded-lg border border-gray-300 bg-white text-sm text-gray-600 file:mr-4 file:border-0 file:bg-gray-100 file:px-4 file:py-3 file:text-sm file:font-medium"
-      />
-
-      <p className="mt-1 text-xs text-gray-500">
-        You can upload up to 4 photos.
-      </p>
-
-      {/* Selected Photo Preview */}
-      {reviewPhotos.length > 0 && (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {reviewPhotos.map((photo, index) => (
-            <div
-              key={`${photo}-${index}`}
-              className="relative overflow-hidden rounded-lg border bg-white"
+      {/* Customer Photos */}
+      {review.photo_urls?.length > 0 && (
+        <div className="flex flex-wrap gap-2.5 mt-3">
+          {review.photo_urls.map((photo, index) => (
+            <a
+              key={`${review.id}-photo-${index}`}
+              href={photo}
+              target="_blank"
+              rel="noreferrer"
+              className="block"
             >
               <img
                 src={photo}
-                alt={`Review upload ${index + 1}`}
-                className="h-28 w-full object-cover"
+                alt={`Customer review ${index + 1}`}
+                className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl border border-gray-200 hover:opacity-90 transition-opacity"
               />
-
-              <button
-                type="button"
-                onClick={() => {
-                  setReviewPhotos((previous) =>
-                    previous.filter(
-                      (_, photoIndex) => photoIndex !== index
-                    )
-                  );
-                }}
-                className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-sm text-white hover:bg-black"
-                aria-label={`Remove photo ${index + 1}`}
-              >
-                ×
-              </button>
-            </div>
+            </a>
           ))}
         </div>
       )}
+
+      {/* Admin Response */}
+      {review.admin_response && (
+        <div className="mt-4 rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-3">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">
+                S
+              </span>
+            </div>
+
+            <p className="text-sm font-semibold text-gray-800">
+              Satthamma Farms
+            </p>
+          </div>
+
+          <p className="mt-2 text-sm leading-5 text-gray-600 whitespace-pre-wrap">
+            {review.admin_response}
+          </p>
+        </div>
+      )}
+    </article>
+  ))}
+</div>
+  )}
+
+ {/* Write a Review */}
+<div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50/70 p-4 sm:p-5">
+  <div className="flex items-start justify-between gap-3 mb-5">
+    <div>
+      <h3 className="text-lg sm:text-xl font-bold text-gray-900">
+        Share your experience
+      </h3>
+      <p className="text-xs sm:text-sm text-gray-500 mt-1">
+        Tell other customers what you think about this product.
+      </p>
     </div>
 
-    {/* Error */}
-    {reviewError && (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {reviewError}
+    <div className="hidden sm:flex shrink-0 items-center justify-center w-10 h-10 rounded-full bg-green-100">
+      <Leaf size={20} weight="fill" className="text-green-600" />
+    </div>
+  </div>
+
+  {/* Customer Name */}
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+      Your name
+    </label>
+
+    <input
+      type="text"
+      value={reviewName}
+      onChange={(e) => setReviewName(e.target.value)}
+      placeholder="Enter your name"
+      maxLength={100}
+      className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+    />
+  </div>
+
+  {/* Rating */}
+<div className="mb-5">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    How would you rate it?
+  </label>
+
+  <div className="flex items-center gap-2">
+    {[1, 2, 3, 4, 5].map((star) => (
+      <button
+        key={star}
+        type="button"
+        onClick={() => setReviewRating(star)}
+        aria-label={`Rate ${star} out of 5`}
+        className={`text-3xl leading-none transition-all duration-200 ${
+          star <= reviewRating
+            ? "scale-110"
+            : "grayscale opacity-40 hover:grayscale-0 hover:opacity-100 hover:scale-105"
+        }`}
+      >
+        {star <= reviewRating ? "🌟" : "⭐"}
+      </button>
+    ))}
+
+    <span className="ml-2 text-sm font-semibold text-gray-700">
+      {reviewRating}/5
+    </span>
+  </div>
+
+  <p className="mt-2 text-xs text-gray-500">
+    {reviewRating === 1 && "😕 Not great"}
+    {reviewRating === 2 && "🙂 Could be better"}
+    {reviewRating === 3 && "😊 Good"}
+    {reviewRating === 4 && "😍 Very good"}
+    {reviewRating === 5 && "🤩 Loved it!"}
+  </p>
+</div>
+
+  {/* Review Text */}
+  <div className="mb-4">
+    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+      Your review
+    </label>
+
+    <textarea
+      value={reviewText}
+      onChange={(e) => setReviewText(e.target.value)}
+      placeholder="How was the product? Share your experience..."
+      maxLength={2000}
+      rows={4}
+      className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+    />
+
+    <div className="mt-1 text-right text-xs text-gray-400">
+      {reviewText.length}/2000
+    </div>
+  </div>
+
+  {/* Photos */}
+  <div className="mb-4">
+    <div className="flex items-center justify-between mb-2">
+      <label className="text-sm font-medium text-gray-700">
+        Add photos
+        <span className="ml-1 text-xs font-normal text-gray-400">
+          (optional)
+        </span>
+      </label>
+
+      <span className="text-xs text-gray-400">
+        {reviewPhotos.length}/4
+      </span>
+    </div>
+
+    <label
+      className={`flex items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm font-medium transition ${
+        reviewPhotos.length >= 4
+          ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+          : "cursor-pointer border-gray-300 bg-white text-gray-600 hover:border-green-400 hover:bg-green-50"
+      }`}
+    >
+      <Plus size={18} />
+
+      <span>
+        {reviewPhotos.length >= 4
+          ? "Maximum 4 photos added"
+          : "Upload product photos"}
+      </span>
+
+      {reviewPhotos.length < 4 && (
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          disabled={reviewSubmitting}
+          className="hidden"
+          onChange={handleReviewPhotoChange}
+        />
+      )}
+    </label>
+
+    {/* Photo Previews */}
+    {reviewPhotos.length > 0 && (
+      <div className="flex flex-wrap gap-2.5 mt-3">
+        {reviewPhotos.map((photo, index) => (
+          <div
+            key={`${photo.url}-${index}`}
+            className="relative group"
+          >
+            <img
+              src={photo.url}
+              alt={`Review upload ${index + 1}`}
+              className="w-20 h-20 object-cover rounded-xl border border-gray-200"
+            />
+
+            <button
+              type="button"
+              onClick={() => {
+                setReviewPhotos((current) =>
+                  current.filter((_, i) => i !== index)
+                );
+              }}
+              disabled={reviewSubmitting}
+              aria-label={`Remove photo ${index + 1}`}
+              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gray-900 text-white text-xs flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            >
+              ×
+            </button>
+          </div>
+        ))}
       </div>
     )}
+  </div>
 
-    {/* Submit */}
-    <button
-      type="submit"
-      disabled={reviewSubmitting}
-      className="w-full rounded-lg bg-green-700 px-5 py-3 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-    >
-      {reviewSubmitting ? "Submitting..." : "Submit Review"}
-    </button>
+  {/* Error */}
+  {reviewError && !reviewLoading && (
+    <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-3.5 py-3 text-sm text-red-600">
+      {reviewError}
+    </div>
+  )}
 
-    <p className="text-xs text-gray-500">
-      Your review will be published after approval.
-    </p>
-  </form>
+  {/* Submit */}
+  <button
+    type="button"
+    disabled={reviewSubmitting}
+    onClick={handleSubmitReview}
+    className="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    {reviewSubmitting ? "Submitting your review..." : "Submit review"}
+  </button>
+
+  <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-gray-400">
+    <ShieldCheck size={14} />
+    <span>Your review will be published after approval.</span>
+  </div>
 </div>
 
   
