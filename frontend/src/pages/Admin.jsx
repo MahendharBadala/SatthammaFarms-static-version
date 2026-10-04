@@ -16,6 +16,14 @@ import {
   ReviewsManager,
 } from "../components/admin/AdminSections";
 
+import {
+  fetchAdminReviews,
+  approveReview,
+  rejectReview,
+  deleteReview,
+  respondToReview,
+} from "../lib/adminReviewApi";
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const empty = { name: "", category: "grains", price: 0, unit: "kg", description: "", image_url: "", video_url: "", gallery: [], stock: 100, featured: false };
 
@@ -34,6 +42,9 @@ export default function Admin() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [form, setForm] = useState(empty);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState("");
   // Tracks ids currently mid-delete so a second click can't fire a duplicate
   // request against an item that's already gone (was the source of the
   // "delete sometimes does nothing" glitch).
@@ -45,16 +56,22 @@ export default function Admin() {
   });
 
   const load = useCallback(async () => {
-    const [p, o, s, c, b, si] = await Promise.all([
-      axios.get(`${API}/products`),
-      axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
-      axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
-      axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
-      axios.get(`${API}/admin/banners`).catch(() => ({ data: [] })),
-      axios.get(`${API}/site`).catch(() => ({ data: null })),
-    ]);
-    setProducts(p.data); setOrders(o.data); setSettings(s.data);
-    setCoupons(c.data); setBanners(b.data); setSiteSettings(si.data);
+  const [p, o, s, c, b, si, r] = await Promise.all([
+  axios.get(`${API}/products`),
+  axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
+  axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
+  axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
+  axios.get(`${API}/admin/banners`).catch(() => ({ data: [] })),
+  axios.get(`${API}/site`).catch(() => ({ data: null })),
+  fetchAdminReviews().catch(() => []),
+  ]);
+   setProducts(p.data);
+   setOrders(o.data);
+   setSettings(s.data);
+   setCoupons(c.data);
+   setBanners(b.data);
+   setSiteSettings(si.data);
+   setReviews(r);
   }, []);
 
   useEffect(() => { if (user?.role === "admin") load(); }, [user, load]);
@@ -247,7 +264,7 @@ export default function Admin() {
       }} />}
     {tab === "reviews" && (
   <ReviewsManager
-    reviews={[]}
+    reviews={reviews}
     onApprove={() => {}}
     onReject={() => {}}
     onDelete={() => {}}
