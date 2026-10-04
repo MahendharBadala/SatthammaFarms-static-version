@@ -644,6 +644,7 @@ export function BannersManager({ banners, onSave, onDelete, onToggleActive, dele
       </div>
     </div>
   );
+}
   // ---------------- Reviews ----------------
 
 export function ReviewsManager({
@@ -868,5 +869,4 @@ export function ReviewsManager({
       </div>
     </div>
   );
-}
 }
