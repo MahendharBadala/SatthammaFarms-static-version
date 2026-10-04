@@ -676,7 +676,7 @@ async def create_review(
         value=reviewer_token,
         httponly=True,
         secure=request.url.scheme == "https",
-        samesite="lax",
+        samesite="none" if request.url.scheme == "https" else "lax",
         max_age=60 * 60 * 24 * 365,
         path="/",
     )
