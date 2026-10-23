@@ -20,7 +20,7 @@ import {
   uploadReviewPhoto,
   submitReview,
 } from "../lib/reviewApi";
-
+import ProductCard from "../components/ProductCard";
 import { fetchProductRecommendations } from "../lib/productApi";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -647,6 +647,50 @@ const reviewDistribution = {
           <div className="mt-6 text-xs text-muted2">
             In stock: {product.stock} {product.unit}
           </div>
+          
+{/* Recommended Products */}
+{(recommendationsLoading || recommendedProducts.length > 0) && (
+  <section className="mt-12 lg:col-span-2">
+    <div className="flex items-end justify-between gap-4 mb-5">
+      <div>
+        <div className="chip">Picked for you</div>
+        <h2 className="font-serif text-2xl sm:text-3xl text-ink mt-2">
+          You May Also Like
+        </h2>
+        <p className="text-sm text-muted2 mt-1">
+          More products you might enjoy from our farm.
+        </p>
+      </div>
+    </div>
+
+    {recommendationsLoading ? (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+        {[1, 2, 3, 4].map((item) => (
+          <div
+            key={item}
+            className="card-earth overflow-hidden animate-pulse"
+          >
+            <div className="aspect-square bg-cream2" />
+            <div className="p-4 space-y-3">
+              <div className="h-3 rounded bg-cream2 w-1/3" />
+              <div className="h-5 rounded bg-cream2 w-3/4" />
+              <div className="h-4 rounded bg-cream2 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+        {recommendedProducts.slice(0, 4).map((recommendedProduct) => (
+          <ProductCard
+            key={recommendedProduct.id}
+            product={recommendedProduct}
+          />
+        ))}
+      </div>
+    )}
+  </section>
+)}
         </div>
       </div>
 
