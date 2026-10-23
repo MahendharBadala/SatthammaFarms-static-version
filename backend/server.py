@@ -86,6 +86,10 @@ class ProductIn(BaseModel):
     stock: int = 100
     featured: bool = False
 
+    # Admin-selected product recommendations
+    related_product_ids: List[str] = []
+    frequently_bought_together_ids: List[str] = []
+
 class ProductOut(ProductIn):
     id: str
     created_at: str
@@ -409,6 +413,9 @@ def product_to_out(doc: dict) -> dict:
         "stock": int(doc.get("stock", 0)),
         "featured": bool(doc.get("featured", False)),
         "created_at": doc.get("created_at", ""),
+        
+        "related_product_ids": list(doc.get("related_product_ids", []) or []),
+        "frequently_bought_together_ids": list(doc.get("frequently_bought_together_ids", []) or []),
     }
 
 @api.get("/products")
