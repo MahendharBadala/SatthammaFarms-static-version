@@ -21,6 +21,7 @@ import {
   submitReview,
 } from "../lib/reviewApi";
 
+import { fetchProductRecommendations } from "../lib/productApi";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 function isVideo(url = "") {
@@ -33,11 +34,15 @@ function isVideo(url = "") {
 export default function ProductDetail() {
   const { id } = useParams();
 
-  const [product, setProduct] = useState(null);
+const [product, setProduct] = useState(null);
 const [error, setError] = useState("");
 const [activeIndex, setActiveIndex] = useState(0);
 const [qty, setQty] = useState(1);
 
+// Recommendations
+const [recommendedProducts, setRecommendedProducts] = useState([]);
+const [recommendationsLoading, setRecommendationsLoading] = useState(true);
+  
 // Reviews
 const [reviewsData, setReviewsData] = useState(null);
 const [reviewLoading, setReviewLoading] = useState(true);
@@ -52,7 +57,6 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-
     setProduct(null);
     setError("");
     setActiveIndex(0);
@@ -77,6 +81,34 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
       cancelled = true;
     };
   }, [id]);
+
+  useEffect(() => {
+  let cancelled = false;
+
+  setRecommendationsLoading(true);
+  setRecommendedProducts([]);
+
+  fetchProductRecommendations(id)
+    .then((data) => {
+      if (cancelled) return;
+      setRecommendedProducts(data || []);
+    })
+    .catch((err) => {
+      if (cancelled) return;
+
+      console.error("Recommendations error:", err);
+      setRecommendedProducts([]);
+    })
+    .finally(() => {
+      if (!cancelled) {
+        setRecommendationsLoading(false);
+      }
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [id]);
   
 // NEW: reviews useEffect
   
