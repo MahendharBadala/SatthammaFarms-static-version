@@ -249,6 +249,7 @@ export default function Admin() {
   { k: "banners", label: "Banners" },
   { k: "site", label: "Site content" },
   { k: "payments", label: "Payments" },
+  { k: "recommended", label: "Recommended" },
 ];
 
   return (
@@ -309,6 +310,30 @@ export default function Admin() {
           <ProductList products={products} onEdit={startEdit} onDelete={del} deletingIds={deletingIds} search={productSearch} />
         </div>
       )}
+
+      {tab === "recommended" && (
+  <div className="space-y-6">
+    <div>
+      <div className="chip">Admin controlled</div>
+
+      <h2 className="font-serif text-3xl text-ink mt-2">
+        Recommended Products
+      </h2>
+
+      <p className="text-muted2 mt-2 max-w-2xl">
+        Choose products that you want customers to see as recommendations
+        when they open a product.
+      </p>
+    </div>
+
+    <div className="card-earth p-6">
+      <p className="text-sm text-muted2">
+        Recommended product selection will appear here.
+      </p>
+    </div>
+  </div>
+)}
+      
       {tab === "orders" && <OrdersTable orders={orders} onUpdateStatus={async (id, status) => {
         try {
           await axios.put(`${API}/admin/orders/${id}/status`, { status });
@@ -316,6 +341,7 @@ export default function Admin() {
           load();
         } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
       }} />}
+      
     {tab === "reviews" && (
   <ReviewsManager
     reviews={reviews}
