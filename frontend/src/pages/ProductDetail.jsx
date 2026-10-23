@@ -647,8 +647,6 @@ const reviewDistribution = {
           <div className="mt-6 text-xs text-muted2">
             In stock: {product.stock} {product.unit}
           </div>
-          </div>
-          </div> 
       
 {/* Recommended Products */}
       
