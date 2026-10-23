@@ -11,3 +11,9 @@ export async function fetchCategories() {
   const { data } = await axios.get(`${API}/categories`);
   return data;
 }
+export async function fetchProductRecommendations(productId) {
+  const { data } = await axios.get(
+    `${API}/products/${productId}/recommendations`
+  );
+  return data;
+}
