@@ -45,6 +45,9 @@ export default function Admin() {
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState("");
+  const [selectedRecommendationProduct, setSelectedRecommendationProduct] = useState("");
+  const [recommendationIds, setRecommendationIds] = useState([]);
+  const [recommendationsSaving, setRecommendationsSaving] = useState(false);
   // Tracks ids currently mid-delete so a second click can't fire a duplicate
   // request against an item that's already gone (was the source of the
   // "delete sometimes does nothing" glitch).
@@ -311,8 +314,9 @@ export default function Admin() {
         </div>
       )}
 
-      {tab === "recommended" && (
+     {tab === "recommended" && (
   <div className="space-y-6">
+
     <div>
       <div className="chip">Admin controlled</div>
 
@@ -321,16 +325,202 @@ export default function Admin() {
       </h2>
 
       <p className="text-muted2 mt-2 max-w-2xl">
-        Choose products that you want customers to see as recommendations
-        when they open a product.
+        Select a product and choose which products should appear under
+        "You May Also Like" on its product page.
       </p>
     </div>
 
+    {/* SELECT PRODUCT TO EDIT */}
     <div className="card-earth p-6">
-      <p className="text-sm text-muted2">
-        Recommended product selection will appear here.
-      </p>
+
+      <label className="block text-sm font-semibold text-ink mb-2">
+        Select Product
+      </label>
+
+      <select
+        value={selectedRecommendationProduct}
+        onChange={(e) => {
+          const productId = e.target.value;
+          setSelectedRecommendationProduct(productId);
+
+          const selectedProduct = products.find(
+            (p) => p.id === productId
+          );
+
+          setRecommendationIds(
+            selectedProduct?.related_product_ids || []
+          );
+        }}
+        className="w-full px-4 py-3 rounded-xl border border-edge bg-white focus:outline-none focus:border-forest"
+      >
+        <option value="">
+          Choose a product...
+        </option>
+
+        {products.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name} — {p.category}
+          </option>
+        ))}
+      </select>
+
     </div>
+
+    {/* PRODUCT SELECTION */}
+    {selectedRecommendationProduct && (
+      <div className="card-earth p-6">
+
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <h3 className="font-serif text-2xl text-ink">
+              Choose Recommendations
+            </h3>
+
+            <p className="text-sm text-muted2 mt-1">
+              Select products from any category.
+            </p>
+          </div>
+
+          <span className="chip">
+            {recommendationIds.length} selected
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+
+          {products
+            .filter(
+              (p) => p.id !== selectedRecommendationProduct
+            )
+            .map((p) => {
+
+              const selected = recommendationIds.includes(p.id);
+
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setRecommendationIds((previous) =>
+                      selected
+                        ? previous.filter((id) => id !== p.id)
+                        : [...previous, p.id]
+                    );
+                  }}
+                  className={`
+                    text-left
+                    rounded-xl
+                    border
+                    p-3
+                    transition-all
+                    ${
+                      selected
+                        ? "border-forest bg-forest/10 ring-2 ring-forest/20"
+                        : "border-edge bg-white hover:border-forest"
+                    }
+                  `}
+                >
+
+                  <div className="flex items-center gap-3">
+
+                    <img
+                      src={resolveMediaUrl(p.image_url)}
+                      alt={p.name}
+                      className="w-14 h-14 rounded-lg object-cover bg-cream2"
+                    />
+
+                    <div className="min-w-0 flex-1">
+
+                      <p className="font-semibold text-ink truncate">
+                        {p.name}
+                      </p>
+
+                      <p className="text-xs text-muted2 mt-1">
+                        {p.category}
+                      </p>
+
+                      <p className="text-sm text-forest font-semibold mt-1">
+                        ₹{p.price}
+                      </p>
+
+                    </div>
+
+                    <div
+                      className={`
+                        w-6 h-6
+                        rounded-full
+                        border-2
+                        flex
+                        items-center
+                        justify-center
+                        shrink-0
+                        ${
+                          selected
+                            ? "bg-forest border-forest text-white"
+                            : "border-edge"
+                        }
+                      `}
+                    >
+                      {selected && "✓"}
+                    </div>
+
+                  </div>
+
+                </button>
+              );
+            })}
+
+        </div>
+
+        {/* SAVE */}
+        <div className="flex justify-end mt-6">
+
+          <button
+            type="button"
+            disabled={recommendationsSaving}
+            onClick={async () => {
+
+              if (!selectedRecommendationProduct) {
+                toast.error("Please select a product first");
+                return;
+              }
+
+              setRecommendationsSaving(true);
+
+              try {
+
+                await axios.put(
+                  `${API}/products/${selectedRecommendationProduct}`,
+                  {
+                    ...products.find(
+                      (p) => p.id === selectedRecommendationProduct
+                    ),
+                    related_product_ids: recommendationIds,
+                  }
+                );
+
+                toast.success("Recommendations saved");
+
+                await load();
+
+              } catch (err) {
+
+                toast.error(
+                  err?.response?.data?.detail ||
+                  "Failed to save recommendations"
+                );
+
+              } finally {setRecommendationsSaving(false); }
+            }}
+            className="btn-primary"
+          >
+            {recommendationsSaving
+              ? "Saving..."
+              : "Save Recommendations"}
+          </button>
+        </div>
+      </div>
+    )}
   </div>
 )}
       
