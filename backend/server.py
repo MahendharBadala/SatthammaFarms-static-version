@@ -412,14 +412,49 @@ def product_to_out(doc: dict) -> dict:
     }
 
 @api.get("/products")
-async def list_products(category: Optional[str] = None, q: Optional[str] = None):
+async def list_products(
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+):
     query: dict = {}
+
     if category and category != "all":
         query["category"] = category
+
     if q:
         query["name"] = {"$regex": q, "$options": "i"}
-    docs = await db.products.find(query).sort("created_at", -1).to_list(500)
-    return [product_to_out(d) for d in docs]
+
+    docs = await db.products.find(
+        query,
+        {
+            "_id": 1,
+            "name": 1,
+            "category": 1,
+            "price": 1,
+            "unit": 1,
+            "description": 1,
+            "image_url": 1,
+            "stock": 1,
+            "featured": 1,
+            "created_at": 1,
+        },
+    ).sort("created_at", -1).to_list(100)
+
+    return [
+        {
+            "id": str(doc["_id"]),
+            "name": doc.get("name", ""),
+            "category": doc.get("category", ""),
+            "price": float(doc.get("price", 0)),
+            "unit": doc.get("unit", "kg"),
+            "description": doc.get("description", ""),
+            "image_url": doc.get("image_url", ""),
+            "stock": int(doc.get("stock", 0)),
+            "featured": bool(doc.get("featured", False)),
+            "created_at": doc.get("created_at", ""),
+        }
+        for doc in docs
+    ]
 
 @api.get("/products/{pid}")
 async def get_product(pid: str):
