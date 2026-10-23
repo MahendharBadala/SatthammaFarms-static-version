@@ -466,6 +466,28 @@ async def get_product(pid: str):
         raise HTTPException(status_code=404, detail="Product not found")
     return product_to_out(doc)
 
+@api.get("/products/{pid}/recommendations")
+async def get_product_recommendations(pid: str):
+    try:
+        product = await db.products.find_one({"_id": ObjectId(pid)})
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid product id") from exc
+
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    category = product.get("category", "")
+
+    docs = await db.products.find(
+        {
+            "_id": {"$ne": product["_id"]},
+            "category": category,
+            "stock": {"$gt": 0},
+        }
+    ).sort("featured", -1).limit(6).to_list(6)
+
+    return [product_to_out(doc) for doc in docs]
+
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     doc = payload.model_dump()
