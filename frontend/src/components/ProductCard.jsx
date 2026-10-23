@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { resolveMediaUrl } from "./MediaUploader";
 
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, priority = false }) {
   const navigate = useNavigate();
   const { add } = useCart();
 
@@ -98,23 +98,27 @@ export default function ProductCard({ product }) {
       {/* IMAGE */}
       <div className="relative aspect-square sm:aspect-[4/3] overflow-hidden bg-cream2">
 
-        <img
-          src={
-            resolveMediaUrl(product.image_url) ||
-            "https://images.unsplash.com/photo-1581600140682-d4e68c8cde32?auto=format&fit=crop&w=1200&q=80"
-          }
-          alt={product.name}
-          loading="lazy"
-          className="
-            w-full
-            h-full
-            object-cover
-            transition-transform
-            duration-500
-            ease-out
-            group-hover:scale-105
-          "
-        />
+       <img
+  src={
+    resolveMediaUrl(product.image_url) ||
+    "https://images.unsplash.com/photo-1581600140682-d4e68c8cde32?auto=format&fit=crop&w=1200&q=80"
+  }
+  alt={product.name}
+  loading={priority ? "eager" : "lazy"}
+  fetchPriority={priority ? "high" : "auto"}
+  decoding="async"
+  width="600"
+  height="600"
+  className="
+    w-full
+    h-full
+    object-cover
+    transition-transform
+    duration-500
+    ease-out
+    group-hover:scale-105
+  "
+/>
 
         {product.video_url && (
           <div className="absolute top-3 left-3 chip !bg-white/90 !text-forest">
