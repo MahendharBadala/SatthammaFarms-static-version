@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { resolveMediaUrl } from "../components/MediaUploader";
 import { useAuth } from "../context/AuthContext";
 import { useSite } from "../context/SiteContext";
 import { Navigate, useNavigate } from "react-router-dom";
