@@ -647,8 +647,11 @@ const reviewDistribution = {
           <div className="mt-6 text-xs text-muted2">
             In stock: {product.stock} {product.unit}
           </div>
-          
+          </div>
+          </div> 
+      
 {/* Recommended Products */}
+      
 {(recommendationsLoading || recommendedProducts.length > 0) && (
   <section className="mt-12 w-full">
 <div className="flex items-end justify-between gap-4 mb-6">
