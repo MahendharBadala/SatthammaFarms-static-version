@@ -650,18 +650,20 @@ const reviewDistribution = {
           
 {/* Recommended Products */}
 {(recommendationsLoading || recommendedProducts.length > 0) && (
-  <section className="mt-12 lg:col-span-2">
-    <div className="flex items-end justify-between gap-4 mb-5">
-      <div>
-        <div className="chip">Picked for you</div>
-        <h2 className="font-serif text-2xl sm:text-3xl text-ink mt-2">
-          You May Also Like
-        </h2>
-        <p className="text-sm text-muted2 mt-1">
-          More products you might enjoy from our farm.
-        </p>
-      </div>
-    </div>
+  <section className="mt-12 w-full">
+<div className="flex items-end justify-between gap-4 mb-6">
+  <div>
+    <div className="chip">Picked for you</div>
+
+    <h2 className="font-serif text-3xl sm:text-4xl text-ink mt-2">
+      You May Also Like
+    </h2>
+
+    <p className="text-muted2 mt-1 text-sm">
+      Handpicked favourites from Satthamma Farms.
+    </p>
+  </div>
+</div>
 
     {recommendationsLoading ? (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
