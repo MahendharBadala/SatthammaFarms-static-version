@@ -15,13 +15,19 @@ import {
   PlayCircle,
 } from "@phosphor-icons/react";
 import { resolveMediaUrl } from "../components/MediaUploader";
+
 import {
   fetchProductReviews,
   uploadReviewPhoto,
   submitReview,
 } from "../lib/reviewApi";
+
 import ProductCard from "../components/ProductCard";
-import { fetchProductRecommendations } from "../lib/productApi";
+import {
+    fetchProductRecommendations,
+    fetchFrequentlyBoughtTogether,
+} from "../lib/productApi";
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 function isVideo(url = "") {
@@ -42,6 +48,10 @@ const [qty, setQty] = useState(1);
 // Recommendations
 const [recommendedProducts, setRecommendedProducts] = useState([]);
 const [recommendationsLoading, setRecommendationsLoading] = useState(true);
+
+  //frequently bought
+const [frequentlyBoughtProducts, setFrequentlyBoughtProducts] = useState([]);
+const [frequentlyBoughtLoading, setFrequentlyBoughtLoading] = useState(true);
   
 // Reviews
 const [reviewsData, setReviewsData] = useState(null);
@@ -102,6 +112,34 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
     .finally(() => {
       if (!cancelled) {
         setRecommendationsLoading(false);
+      }
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [id]);
+
+  //frequently bought
+useEffect(() => {
+  let cancelled = false;
+
+  setFrequentlyBoughtLoading(true);
+  setFrequentlyBoughtProducts([]);
+
+  fetchFrequentlyBoughtTogether(id)
+    .then((data) => {
+      if (cancelled) return;
+      setFrequentlyBoughtProducts(data || []);
+    })
+    .catch((err) => {
+      if (cancelled) return;
+      console.error("Frequently bought together error:", err);
+      setFrequentlyBoughtProducts([]);
+    })
+    .finally(() => {
+      if (!cancelled) {
+        setFrequentlyBoughtLoading(false);
       }
     });
 
@@ -694,8 +732,74 @@ const reviewDistribution = {
     )}
   </section>
 )}
+
+{/* Frequently Bought Together */}
+{(frequentlyBoughtLoading || frequentlyBoughtProducts.length > 0) && (
+  <section className="mt-8 w-full">
+    <div className="card-earth overflow-hidden">
+      
+      <div className="px-4 py-4 sm:px-5 sm:py-5 border-b border-edge">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🛒</span>
+              <h2 className="font-serif text-xl sm:text-2xl text-ink">
+                Frequently Bought Together
+              </h2>
+            </div>
+
+            <p className="text-xs sm:text-sm text-muted2 mt-1">
+              Customers often buy these products together.
+            </p>
+          </div>
+
+          {!frequentlyBoughtLoading && (
+            <span className="hidden sm:inline-flex chip">
+              Popular pairings
+            </span>
+          )}
         </div>
       </div>
+
+      {frequentlyBoughtLoading ? (
+        <div className="p-4 sm:p-5">
+          <div className="flex gap-3 overflow-hidden">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="shrink-0 w-[180px] sm:w-[210px] animate-pulse"
+              >
+                <div className="aspect-[4/3] rounded-xl bg-cream2" />
+
+                <div className="mt-3 space-y-2">
+                  <div className="h-3 rounded bg-cream2 w-3/4" />
+                  <div className="h-3 rounded bg-cream2 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 sm:p-5">
+          <div className="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar pb-1">
+            {frequentlyBoughtProducts.slice(0, 4).map((item) => (
+              <div
+                key={item.id}
+                className="shrink-0 w-[175px] sm:w-[205px]"
+              >
+                <ProductCard product={item} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  </section>
+)}
+        </div>
+      </div>
+
 
       {/* Reviews Section */}
 <section className="mt-10 border-t pt-8">
