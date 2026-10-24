@@ -619,8 +619,12 @@ async def get_frequently_bought_together(pid: str):
             )
 
     if not product_counts:
-        return []
-
+    return {
+        "debug": True,
+        "product_id": pid,
+        "orders_found": len(orders),
+        "message": "No other products found in matching orders",
+    }
     # Most frequently purchased together first
     sorted_products = sorted(
         product_counts.items(),
