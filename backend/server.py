@@ -85,6 +85,7 @@ class ProductIn(BaseModel):
     gallery: List[str] = []
     stock: int = 100
     featured: bool = False
+    recommended_product_ids: List[str] = []
 
     # Admin-selected product recommendations
     related_product_ids: List[str] = []
@@ -478,11 +479,60 @@ async def get_product_recommendations(pid: str):
     try:
         product = await db.products.find_one({"_id": ObjectId(pid)})
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Invalid product id") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product id"
+        ) from exc
 
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
 
+    recommended_ids = product.get(
+        "recommended_product_ids",
+        []
+    )
+
+    # If admin has selected recommendations,
+    # return those products.
+    if recommended_ids:
+        object_ids = []
+
+        for rid in recommended_ids:
+            try:
+                object_ids.append(ObjectId(rid))
+            except Exception:
+                continue
+
+        if object_ids:
+            docs = await db.products.find(
+                {
+                    "_id": {"$in": object_ids},
+                    "stock": {"$gt": 0},
+                }
+            ).to_list(len(object_ids))
+
+            # Keep the same order as selected by admin
+            docs_by_id = {
+                str(doc["_id"]): doc
+                for doc in docs
+            }
+
+            ordered_docs = [
+                docs_by_id[rid]
+                for rid in recommended_ids
+                if rid in docs_by_id
+            ]
+
+            return [
+                product_to_out(doc)
+                for doc in ordered_docs
+            ]
+
+    # No admin recommendations yet:
+    # fall back to same-category products.
     category = product.get("category", "")
 
     docs = await db.products.find(
@@ -493,8 +543,10 @@ async def get_product_recommendations(pid: str):
         }
     ).sort("featured", -1).limit(6).to_list(6)
 
-    return [product_to_out(doc) for doc in docs]
-
+    return [
+        product_to_out(doc)
+        for doc in docs
+    ]
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     doc = payload.model_dump()
