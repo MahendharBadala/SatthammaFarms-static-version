@@ -669,6 +669,38 @@ async def get_frequently_bought_together(pid: str):
             )
 
     return result
+
+
+
+
+
+
+@api.get("/admin/debug/order-items")
+async def debug_order_items(_admin: dict = Depends(get_admin_user)):
+    docs = await db.orders.find(
+        {},
+        {
+            "items": 1,
+            "status": 1,
+            "created_at": 1
+        }
+    ).sort("created_at", -1).to_list(20)
+
+    return [
+        {
+            "id": str(doc["_id"]),
+            "status": doc.get("status"),
+            "items": doc.get("items", []),
+            "created_at": doc.get("created_at", "")
+        }
+        for doc in docs
+    ]
+
+
+
+
+
+
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     doc = payload.model_dump()
