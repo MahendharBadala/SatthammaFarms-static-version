@@ -85,7 +85,7 @@ class ProductIn(BaseModel):
     gallery: List[str] = []
     stock: int = 100
     featured: bool = False
-    recommended_product_ids: List[str] = []
+    related_product_ids: List[str] = []
 
     # Admin-selected product recommendations
     related_product_ids: List[str] = []
@@ -491,7 +491,7 @@ async def get_product_recommendations(pid: str):
         )
 
     recommended_ids = product.get(
-        "recommended_product_ids",
+        "related_product_ids",
         []
     )
 
