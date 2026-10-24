@@ -17,3 +17,9 @@ export async function fetchProductRecommendations(productId) {
   );
   return data;
 }
+export async function fetchFrequentlyBoughtTogether(productId) {
+  const { data } = await axios.get(
+    `${API}/products/${productId}/frequently-bought-together`
+  );
+  return data;
+}
