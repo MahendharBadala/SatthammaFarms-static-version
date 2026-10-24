@@ -547,6 +547,128 @@ async def get_product_recommendations(pid: str):
         product_to_out(doc)
         for doc in docs
     ]
+
+@api.get("/products/{pid}/frequently-bought-together")
+async def get_frequently_bought_together(pid: str):
+    try:
+        product_oid = ObjectId(pid)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product id"
+        ) from exc
+
+    # Make sure the product exists
+    product = await db.products.find_one({"_id": product_oid})
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Product not found"
+        )
+
+    # Find orders containing this product
+    orders = await db.orders.find(
+        {
+            "items": {
+                "$elemMatch": {
+                    "product_id": pid
+                }
+            },
+            "status": {
+                "$nin": ["cancelled"]
+            }
+        },
+        {
+            "items": 1
+        }
+    ).to_list(5000)
+
+    product_counts = {}
+
+    # Count how often other products appear
+    # together with the current product
+    for order in orders:
+        items = order.get("items", [])
+
+        contains_current = any(
+            item.get("product_id") == pid
+            for item in items
+        )
+
+        if not contains_current:
+            continue
+
+        # Don't count the current product itself
+        seen_in_order = set()
+
+        for item in items:
+            other_id = item.get("product_id")
+
+            if not other_id or other_id == pid:
+                continue
+
+            # Count a product only once per order
+            if other_id in seen_in_order:
+                continue
+
+            seen_in_order.add(other_id)
+
+            product_counts[other_id] = (
+                product_counts.get(other_id, 0) + 1
+            )
+
+    if not product_counts:
+        return []
+
+    # Most frequently purchased together first
+    sorted_products = sorted(
+        product_counts.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    recommended_ids = [
+        product_id
+        for product_id, count in sorted_products[:6]
+    ]
+
+    # Convert IDs safely
+    object_ids = []
+
+    for product_id in recommended_ids:
+        try:
+            object_ids.append(ObjectId(product_id))
+        except Exception:
+            continue
+
+    if not object_ids:
+        return []
+
+    docs = await db.products.find(
+        {
+            "_id": {"$in": object_ids},
+            "stock": {"$gt": 0}
+        }
+    ).to_list(len(object_ids))
+
+    docs_by_id = {
+        str(doc["_id"]): doc
+        for doc in docs
+    }
+
+    # Preserve ranking from purchase frequency
+    result = []
+
+    for product_id in recommended_ids:
+        if product_id in docs_by_id:
+            result.append(
+                product_to_out(
+                    docs_by_id[product_id]
+                )
+            )
+
+    return result
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     doc = payload.model_dump()
