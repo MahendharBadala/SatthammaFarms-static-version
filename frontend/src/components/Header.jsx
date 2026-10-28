@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { useLanguage } from "../context/LanguageContext";
 import AdminLoginModal from "./AdminLoginModal";
 import {
   ShoppingBag,
@@ -16,20 +17,16 @@ import {
 export default function Header() {
   const { user, logout } = useAuth();
   const { count } = useCart();
+  
+  const { language, setLanguage, t } = useLanguage();
+  
   const nav = useNavigate();
   const loc = useLocation();
+ 
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const [language, setLanguage] = useState(
-  localStorage.getItem("satthamma_language") || "en"
-);
-const [languageOpen, setLanguageOpen] = useState(false);
-
-useEffect(() => {
-  localStorage.setItem("satthamma_language", language);
-}, [language]);
-
+  const [languageOpen, setLanguageOpen] = useState(false);
+  
   // Secret unlock: 5 rapid clicks on logo within 2 seconds opens admin modal.
   const clicks = useRef({ n: 0, last: 0 });
   const onLogoClick = (e) => {
@@ -151,6 +148,7 @@ useEffect(() => {
     </div>
   )}
 </div>
+      
       {/* Cart*/}
       <Link
         to="/cart"
@@ -167,6 +165,7 @@ useEffect(() => {
           </span>
         )}
       </Link>
+      
       {/* Desktop Admin Buttons */}
       {user?.role === "admin" && (
         <>
@@ -175,7 +174,7 @@ useEffect(() => {
             className="btn-outline hidden md:inline-flex items-center gap-2 !py-2 !px-3 text-xs"
           >
             <ShieldCheck size={16} />
-            Admin
+                {t("admin")}
           </button>
 
           <button
@@ -195,10 +194,10 @@ useEffect(() => {
 
   {/* Desktop Navigation */}
   <nav className="hidden md:flex items-center justify-center gap-8 mt-4">
-    {link("/", "Home", "nav-home")}
-    {link("/products", "Our Products", "nav-products")}
-    {link("/about", "Our Story", "nav-about")}
-    {link("/contact", "Contact", "nav-contact")}
+    {link("/", t("home"), "nav-home")}
+    {link("/products", t("products"), "nav-products")}
+    {link("/about", t("story"), "nav-about")}
+    {link("/contact", t("contact"), "nav-contact")}
   </nav>
 
   {/* Mobile Navigation */}
@@ -212,7 +211,7 @@ useEffect(() => {
             : "text-muted2"
         }`}
       >
-        Home
+       {t("home")}
       </Link>
 
       <Link
@@ -223,7 +222,7 @@ useEffect(() => {
             : "text-muted2"
         }`}
       >
-        Our Products
+       {t("products")}
       </Link>
     </div>
   </div>
