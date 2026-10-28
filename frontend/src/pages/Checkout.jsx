@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { useLanguage } from "../context/LanguageContext";
 import { useCart } from "../context/CartContext";
 import { useSite } from "../context/SiteContext";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ function buildWhatsAppMessage({ orderId, customerName, phone, pincode, address, 
 export default function Checkout() {
   const { items, total, clear } = useCart();
   const { site } = useSite();
+  const { t } = useLanguage();
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [pincode, setPincode] = useState("");
@@ -126,7 +128,7 @@ export default function Checkout() {
         >
           <WhatsappLogo size={18} weight="duotone" /> Open WhatsApp
         </a>
-        <Link to="/products" className="btn-outline">Continue shopping</Link>
+        <Link to="/products" className="btn-outline">{t("Continue shopping")}</Link>
       </div>
     </div>
   );
@@ -134,8 +136,8 @@ export default function Checkout() {
   return (
     <div className="container mx-auto py-12 grid lg:grid-cols-3 gap-8">
       <form onSubmit={placeOrder} className="lg:col-span-2 card-earth p-8 space-y-4" data-testid="checkout-form">
-        <div className="chip">Checkout</div>
-        <h1 className="font-serif text-4xl text-ink">Delivery details</h1>
+        <div className="chip">{t("Checkout")}</div>
+        <h1 className="font-serif text-4xl text-ink">{t("Delivery details")}</h1>
 
         <div>
           <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Full name</label>
@@ -219,7 +221,7 @@ export default function Checkout() {
       </form>
 
       <div className="card-earth p-6 h-fit">
-        <h3 className="font-serif text-2xl text-ink">Summary</h3>
+        <h3 className="font-serif text-2xl text-ink">{t("Summary")}</h3>
         <div className="mt-4 space-y-3">
           {items.map((i) => (
             <div key={i.id} className="flex gap-3 text-sm">
@@ -270,7 +272,7 @@ export default function Checkout() {
           )}
         </div>
 
-        <div className="flex justify-between text-sm text-muted2"><span>Subtotal</span><span>₹{total}</span></div>
+        <div className="flex justify-between text-sm text-muted2"><span>{t("subtotal")}</span><span>₹{total}</span></div>
         {couponInfo && (
           <div className="flex justify-between text-sm text-forest mt-1" data-testid="summary-discount">
             <span>Discount ({couponInfo.code})</span><span>− ₹{couponInfo.discount_amount}</span>
@@ -278,7 +280,7 @@ export default function Checkout() {
         )}
         <div className="border-t border-edge my-3" />
         <div className="flex justify-between font-serif text-xl text-forest font-semibold">
-          <span>Total</span><span data-testid="summary-total">₹{finalTotal}</span>
+          <span>{t("Total")}</span><span data-testid="summary-total">₹{finalTotal}</span>
         </div>
       </div>
     </div>
