@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ import { resolveMediaUrl } from "./MediaUploader";
 export default function ProductCard({ product, priority = false }) {
   const navigate = useNavigate();
   const { add } = useCart();
+  const { t } = useLanguage();
 
   const [touchPreview, setTouchPreview] = useState(false);
   const longPressTimer = useRef(null);
@@ -123,13 +125,13 @@ export default function ProductCard({ product, priority = false }) {
         {product.video_url && (
           <div className="absolute top-3 left-3 chip !bg-white/90 !text-forest">
             <PlayCircle size={14} weight="duotone" />
-            Video
+             {t("video")}
           </div>
         )}
 
         {product.featured && (
           <div className="absolute top-3 right-3 chip">
-            Featured
+            {t("featured")}
           </div>
         )}
 
@@ -184,10 +186,12 @@ export default function ProductCard({ product, priority = false }) {
 
             <div className="mt-3 flex items-center gap-2 text-xs font-semibold">
               <Leaf size={15} />
-              Organic
+              {t("organic")}
+              
               <span className="opacity-50">•</span>
               <ShieldCheck size={15} />
-              No Chemicals
+             {t("noChemicals")}
+              
             </div>
           </div>
         </div>
@@ -225,7 +229,7 @@ export default function ProductCard({ product, priority = false }) {
             className="btn-primary !py-2 !px-3 text-xs sm:text-sm inline-flex items-center gap-1 shrink-0"
           >
             <Plus size={16} weight="bold" />
-            Cart
+           {t("addToCart")}
           </button>
         </div>
       </div>
