@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "./Logo";
 import { useAuth } from "../context/AuthContext";
@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   List,
   X,
+  Globe,
 } from "@phosphor-icons/react";
 
 export default function Header() {
@@ -19,6 +20,15 @@ export default function Header() {
   const loc = useLocation();
   const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const [language, setLanguage] = useState(
+  localStorage.getItem("satthamma_language") || "en"
+);
+const [languageOpen, setLanguageOpen] = useState(false);
+
+useEffect(() => {
+  localStorage.setItem("satthamma_language", language);
+}, [language]);
 
   // Secret unlock: 5 rapid clicks on logo within 2 seconds opens admin modal.
   const clicks = useRef({ n: 0, last: 0 });
@@ -70,6 +80,78 @@ export default function Header() {
     </div>
     {/* Right Side */}
     <div className="flex items-center gap-2">
+
+      <div className="relative">
+  <button
+    type="button"
+    onClick={() => setLanguageOpen((prev) => !prev)}
+    className="rounded-full border border-edge px-3 py-2 hover:bg-cream2 transition-colors inline-flex items-center gap-1.5 text-xs font-semibold text-ink"
+    aria-label="Choose language"
+  >
+    <Globe size={18} weight="duotone" />
+    <span className="hidden sm:inline">
+      {language === "en"
+        ? "భాష / भाषा"
+        : language === "te"
+        ? "తెలుగు"
+        : "हिन्दी"}
+    </span>
+  </button>
+
+  {languageOpen && (
+    <div className="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-edge bg-white shadow-xl p-2 z-50">
+      <div className="px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-muted2 font-bold">
+        Choose Language
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          setLanguage("en");
+          setLanguageOpen(false);
+        }}
+        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition ${
+          language === "en"
+            ? "bg-forest text-white"
+            : "hover:bg-cream2 text-ink"
+        }`}
+      >
+        🇬🇧 English
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setLanguage("te");
+          setLanguageOpen(false);
+        }}
+        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition ${
+          language === "te"
+            ? "bg-forest text-white"
+            : "hover:bg-cream2 text-ink"
+        }`}
+      >
+        🇮🇳 తెలుగు
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setLanguage("hi");
+          setLanguageOpen(false);
+        }}
+        className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition ${
+          language === "hi"
+            ? "bg-forest text-white"
+            : "hover:bg-cream2 text-ink"
+        }`}
+      >
+        🇮🇳 हिन्दी
+      </button>
+    </div>
+  )}
+</div>
+      {/* Cart*/}
       <Link
         to="/cart"
         data-testid="nav-cart"
