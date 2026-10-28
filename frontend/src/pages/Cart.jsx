@@ -3,25 +3,27 @@ import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { Trash, Plus, Minus, ShoppingBagOpen } from "@phosphor-icons/react";
 import { resolveMediaUrl } from "../components/MediaUploader";
+import { useLanguage } from "../context/LanguageContext";
 
 export default function Cart() {
   const { items, update, remove, total, clear } = useCart();
+  const { t } = useLanguage();
 
   if (items.length === 0) {
     return (
       <div className="container mx-auto py-24 text-center">
         <ShoppingBagOpen size={64} weight="duotone" className="text-terracotta mx-auto" />
-        <h1 className="font-serif text-4xl mt-4 text-ink">Your basket is empty</h1>
-        <p className="text-muted2 mt-2">Explore the harvest and fill it with goodness.</p>
-        <Link to="/products" data-testid="cart-empty-shop" className="btn-primary mt-6 inline-block">Browse products</Link>
+        <h1 className="font-serif text-4xl mt-4 text-ink">{t("basketisEmpty")}</h1>
+        <p className="text-muted2 mt-2">{t("exploreHarvest")}.</p>
+        <Link to="/products" data-testid="cart-empty-shop" className="btn-primary mt-6 inline-block">{t("browseProducts")}</Link>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto py-12">
-      <h1 className="font-serif text-5xl text-ink">Your Cart</h1>
-      <p className="text-muted2 mt-1">Review your harvest before checkout.</p>
+      <h1 className="font-serif text-5xl text-ink">{t("yourCart")}</h1>
+      <p className="text-muted2 mt-1">{t("reviewHarvest")}</p>
       <div className="grid lg:grid-cols-3 gap-8 mt-8">
         <div className="lg:col-span-2 space-y-4">
           {items.map(item => (
@@ -44,18 +46,18 @@ export default function Cart() {
               </div>
             </div>
           ))}
-          <button onClick={clear} className="text-sm text-muted2 hover:text-terracotta">Clear cart</button>
+          <button onClick={clear} className="text-sm text-muted2 hover:text-terracotta">{t("clearCart")}</button>
         </div>
         <div className="card-earth p-6 h-fit sticky top-24">
-          <h3 className="font-serif text-2xl text-ink">Order summary</h3>
+          <h3 className="font-serif text-2xl text-ink">{t("orderSummary")}</h3>
           <div className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between text-muted2"><span>Subtotal</span><span data-testid="cart-subtotal">₹{total}</span></div>
-            <div className="flex justify-between text-muted2"><span>Delivery</span><span>Calculated at checkout</span></div>
+            <div className="flex justify-between text-muted2"><span>{t("subtotal")}</span><span data-testid="cart-subtotal">₹{total}</span></div>
+            <div className="flex justify-between text-muted2"><span>{t("delivery")}</span><span>{t("calculatedAtCheckout")}</span></div>
           </div>
           <div className="border-t border-edge my-4"></div>
-          <div className="flex justify-between font-serif text-2xl text-forest font-semibold"><span>Total</span><span data-testid="cart-total">₹{total}</span></div>
-          <Link to="/checkout" data-testid="cart-checkout-btn" className="btn-primary w-full text-center block mt-6">Proceed to checkout</Link>
-          <Link to="/products" className="text-sm text-muted2 hover:text-forest block text-center mt-4">Continue shopping</Link>
+          <div className="flex justify-between font-serif text-2xl text-forest font-semibold"><span>{t("total")}</span><span data-testid="cart-total">₹{total}</span></div>
+          <Link to="/checkout" data-testid="cart-checkout-btn" className="btn-primary w-full text-center block mt-6">{t("proceedtoCheckout")}</Link>
+          <Link to="/products" className="text-sm text-muted2 hover:text-forest block text-center mt-4">{t("continueShopping")}</Link>
         </div>
       </div>
     </div>
