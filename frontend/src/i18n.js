@@ -6,6 +6,7 @@ export const translations = {
     contact: "Contact",
     cart: "Cart",
     admin: "Admin",
+    checkout: "Checkout",
 
     productsTitle: "Products",
     productsSubtitle:
@@ -53,6 +54,7 @@ export const translations = {
     contact: "సంప్రదించండి",
     cart: "కార్ట్",
     admin: "అడ్మిన్",
+    checkout: "చెకౌట్",
 
     productsTitle: "ఉత్పత్తులు",
     productsSubtitle:
@@ -102,6 +104,7 @@ export const translations = {
     contact: "संपर्क करें",
     cart: "कार्ट",
     admin: "एडमिन",
+    checkout: "चेकआउट",
 
     productsTitle: "उत्पाद",
     productsSubtitle:
