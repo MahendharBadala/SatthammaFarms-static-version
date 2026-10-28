@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLanguage } from "../context/LanguageContext";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { useCart } from "../context/CartContext";
@@ -39,11 +40,11 @@ function isVideo(url = "") {
 
 export default function ProductDetail() {
   const { id } = useParams();
-
-const [product, setProduct] = useState(null);
-const [error, setError] = useState("");
-const [activeIndex, setActiveIndex] = useState(0);
-const [qty, setQty] = useState(1);
+  const [product, setProduct] = useState(null);
+  const [error, setError] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [qty, setQty] = useState(1);
+  const { t } = useLanguage();
 
 // Recommendations
 const [recommendedProducts, setRecommendedProducts] = useState([]);
@@ -511,7 +512,7 @@ const reviewDistribution = {
               {currentMedia?.type === "video" && (
                 <div className="absolute top-3 left-3 chip !bg-white/90 !text-forest">
                   <PlayCircle size={14} />
-                  Video
+                  {t("video")}
                 </div>
               )}
             </div>
@@ -678,7 +679,7 @@ const reviewDistribution = {
               }}
               className="btn-primary flex-1"
             >
-              Add to cart · ₹{product.price * qty}
+              {t("addToCart")} · ₹{product.price * qty}
             </button>
           </div>
 
@@ -692,15 +693,17 @@ const reviewDistribution = {
   <section className="mt-12 w-full">
 <div className="flex items-end justify-between gap-4 mb-6">
   <div>
-    <div className="chip">Picked for you</div>
+    <div 
+      className="chip">{t("pickedForYou")}
+    </div>
 
-    <h2 className="font-serif text-3xl sm:text-4xl text-ink mt-2">
-      You May Also Like
-    </h2>
+   <h2 className="font-serif text-3xl sm:text-4xl text-ink mt-2">
+       {t("youMayAlsoLike")}
+   </h2>
 
-    <p className="text-muted2 mt-1 text-sm">
-      Handpicked favourites from Satthamma Farms.
-    </p>
+   <p className="text-muted2 mt-1 text-sm">
+     {t("handpickedFavourites")}
+   </p>
   </div>
 </div>
 
