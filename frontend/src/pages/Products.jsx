@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { MagnifyingGlass } from "@phosphor-icons/react";
+import { useLanguage } from "../context/LanguageContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 export default function Products() {
@@ -11,6 +12,7 @@ export default function Products() {
     data: products = [],
     isLoading,
   } = useProducts();
+  const { t } = useLanguage();
   const [categories, setCategories] = useState([]);
   const [q, setQ] = useState("");
   const [params, setParams] = useSearchParams();
@@ -35,24 +37,31 @@ export default function Products() {
     
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-6 md:mb-10">
         <div>
-          <div className="chip">Our full harvest</div>
-          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl mt-2 text-ink">Products</h1>
-          <p className="text-muted2 mt-2 max-w-lg">Freshly harvested, hand-cleaned, and packed with care. Choose your favourites.</p>
+         <div className="chip">{t("products")}</div>
+
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl mt-2 text-ink">
+               {t("productsTitle")}
+            </h1>
+
+            <p className="text-muted2 mt-2 max-w-lg">
+               {t("productsSubtitle")}
+            </p>
         </div>
+        
         <div className="relative w-full md:w-md">
           <MagnifyingGlass size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted2" />
           <input
             data-testid="product-search-input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search corn,mirchi powder, dal..."
+            placeholder={t("searchPlaceholder")}
             className="w-full pl-11 pr-4 py-3 rounded-full border border-edge bg-white focus:outline-none focus:border-forest text-sm"
           />
         </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-5 snap-x">
-        {[{ key: "all", label: "All" }, ...categories].map(c => (
+        {[{ key: "all", label: t("all") }, ...categories].map(c => (
           <button
             key={c.key}
             data-testid={`category-filter-${c.key}`}
