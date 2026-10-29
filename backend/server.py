@@ -13,6 +13,10 @@ from pydantic import BaseModel, Field, EmailStr, BeforeValidator
 from typing import List, Optional, Annotated, Any
 from datetime import datetime, timezone, timedelta
 
+import hashlib
+import secrets
+import random
+
 import os
 import logging
 import cloudinary
@@ -161,6 +165,37 @@ class CouponValidateIn(BaseModel):
     code: str
     cart_total: float = 0
 
+class GamePlayIn(BaseModel):
+    game: str
+    def _get_game_guest_id(request: Request) -> str:
+    guest_id = request.cookies.get("satthamma_game_guest")
+
+    if not guest_id or len(guest_id) > 100:
+        guest_id = secrets.token_urlsafe(32)
+
+    return guest_id
+
+
+def _hash_game_guest_id(guest_id: str) -> str:
+    return hashlib.sha256(guest_id.encode("utf-8")).hexdigest()
+
+
+def _select_game_reward() -> dict:
+    rewards = [
+        {"label": "5% OFF", "type": "percent", "value": 5, "weight": 35},
+        {"label": "10% OFF", "type": "percent", "value": 10, "weight": 15},
+        {"label": "₹50 OFF", "type": "flat", "value": 50, "weight": 10},
+        {"label": "Better luck next time", "type": "none", "value": 0, "weight": 40},
+    ]
+
+    selected = random.choices(
+        rewards,
+        weights=[reward["weight"] for reward in rewards],
+        k=1,
+    )[0]
+
+    return selected.copy()
+    
 # ---------------- Banners ----------------
 class BannerIn(BaseModel):
     kind: str = "slider"  # slider | promo
@@ -1695,6 +1730,136 @@ async def admin_delete_coupon(cid: str, _admin: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=400, detail="Invalid id") from exc
     return {"ok": True}
 
+@api.post("/games/play")
+async def play_reward_game(
+    payload: GamePlayIn,
+    request: Request,
+    response: Response,
+):
+    game = (payload.game or "").strip().lower()
+
+    if game not in {"spin", "scratch"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid game. Use 'spin' or 'scratch'.",
+        )
+
+    # Get or create a guest browser identifier.
+    guest_id = _get_game_guest_id(request)
+    guest_hash = _hash_game_guest_id(guest_id)
+
+    # Limit each browser to one attempt per game per 24 hours.
+   now = datetime.now(timezone.utc)
+
+   day_key = now.strftime("%Y-%m-%d")
+   existing = await db.game_claims.find_one({
+    "guest_hash": guest_hash,
+    "game": game,
+    "day_key": day_key,
+})
+
+    if existing:
+        raise HTTPException(
+            status_code=429,
+            detail="You've already played this game recently. Please try again later.",
+        )
+
+    reward = _select_game_reward()
+    coupon_code = None
+
+    # Generate a unique coupon for winning rewards.
+    if reward["type"] in {"percent", "flat"}:
+        for _ in range(5):
+            candidate = "SF" + secrets.token_hex(5).upper()
+
+            if not await db.coupons.find_one({"code": candidate}):
+                coupon_code = candidate
+                break
+
+        if not coupon_code:
+            raise HTTPException(
+                status_code=500,
+                detail="Could not generate a coupon. Please try again.",
+            )
+
+        coupon_doc = {
+            "code": coupon_code,
+            "type": reward["type"],
+            "value": reward["value"],
+            "min_order": 0,
+            "max_uses": 1,
+            "expires_at": (now + timedelta(days=7)).isoformat(),
+            "active": True,
+            "uses": 0,
+            "created_at": now.isoformat(),
+            "source": "reward_game",
+            "game": game,
+            "guest_hash": guest_hash,
+        }
+
+        await db.coupons.insert_one(coupon_doc)
+
+    # Save the attempt, including losing attempts.
+   claim_doc = {
+    "guest_hash": guest_hash,
+    "game": game,
+    "day_key": now.strftime("%Y-%m-%d"),
+    "reward_label": reward["label"],
+    "coupon_code": coupon_code,
+    "created_at": now.isoformat(),
+}
+    try:
+    await db.game_claims.insert_one(claim_doc)
+except Exception as exc:
+    # Remove the unused coupon if this claim could not be saved.
+    if coupon_code:
+        await db.coupons.delete_one({
+            "code": coupon_code,
+            "source": "reward_game",
+            "guest_hash": guest_hash,
+        })
+
+    if getattr(exc, "code", None) == 11000:
+        raise HTTPException(
+            status_code=429,
+            detail="You've already played this game today. Please try again tomorrow.",
+        ) from exc
+
+    raise HTTPException(
+        status_code=500,
+        detail="We couldn't save your game result. Please try again.",
+    ) from exc
+
+
+    # Persist a newly generated guest ID in a browser cookie.
+    response.set_cookie(
+        key="satthamma_game_guest",
+        value=guest_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+
+    return {
+        "game": game,
+        "reward": reward["label"],
+        "won": coupon_code is not None,
+        "coupon_code": coupon_code,
+        "expires_at": (
+            (now + timedelta(days=7)).isoformat()
+            if coupon_code
+            else None
+        ),
+        "message": (
+            "Congratulations! Your coupon is ready."
+            if coupon_code
+            else "Better luck next time!"
+        ),
+    }
+    
+
 # --- Banners ---
 def _banner_to_out(b: dict) -> dict:
     return {
@@ -2322,6 +2487,19 @@ async def on_startup():
         for s in seed:
             s["created_at"] = datetime.now(timezone.utc).isoformat()
         await db.products.insert_many(seed)
+
+
+@app.on_event("startup")
+async def ensure_game_claim_indexes():
+    await db.game_claims.create_index(
+        [
+            ("guest_hash", 1),
+            ("game", 1),
+            ("day_key", 1),
+        ],
+        unique=True,
+        name="unique_daily_game_claim",
+    )
 
 app.include_router(api)
 
