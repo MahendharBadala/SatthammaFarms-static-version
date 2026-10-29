@@ -1748,12 +1748,11 @@ async def play_reward_game(
     # Get or create a guest browser identifier.
     guest_id = _get_game_guest_id(request)
     guest_hash = _hash_game_guest_id(guest_id)
-
     # Limit each browser to one attempt per game per 24 hours.
-   now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
 
-   day_key = now.strftime("%Y-%m-%d")
-   existing = await db.game_claims.find_one({
+    day_key = now.strftime("%Y-%m-%d")
+    existing = await db.game_claims.find_one({
     "guest_hash": guest_hash,
     "game": game,
     "day_key": day_key,
