@@ -216,17 +216,15 @@ def _hash_game_guest_id(guest_id: str) -> str:
     return hashlib.sha256(guest_id.encode("utf-8")).hexdigest()
 
 
-def _select_game_reward() -> dict:
-    rewards = [
-        {"label": "5% OFF", "type": "percent", "value": 5, "weight": 35},
-        {"label": "10% OFF", "type": "percent", "value": 10, "weight": 15},
-        {"label": "₹50 OFF", "type": "flat", "value": 50, "weight": 10},
-        {"label": "Better luck next time", "type": "none", "value": 0, "weight": 40},
-    ]
+def _select_game_reward(settings: dict | None = None) -> dict:
+    if settings is None:
+        settings = DEFAULT_GAME_SETTINGS
+
+    rewards = settings.get("rewards") or DEFAULT_GAME_SETTINGS["rewards"]
 
     selected = random.choices(
         rewards,
-        weights=[reward["weight"] for reward in rewards],
+        weights=[float(reward["weight"]) for reward in rewards],
         k=1,
     )[0]
 
