@@ -1748,31 +1748,39 @@ async def play_reward_game(
     # Get or create a guest browser identifier.
     guest_id = _get_game_guest_id(request)
     guest_hash = _hash_game_guest_id(guest_id)
-    # Limit each browser to one attempt per game per 24 hours.
-    now = datetime.now(timezone.utc)
 
+    now = datetime.now(timezone.utc)
     day_key = now.strftime("%Y-%m-%d")
-    existing = await db.game_claims.find_one({
-    "guest_hash": guest_hash,
-    "game": game,
-    "day_key": day_key,
-})
+
+    # Check whether this browser has already played this game today.
+    existing = await db.game_claims.find_one(
+        {
+            "guest_hash": guest_hash,
+            "game": game,
+            "day_key": day_key,
+        }
+    )
 
     if existing:
         raise HTTPException(
             status_code=429,
-            detail="You've already played this game recently. Please try again later.",
+            detail="You've already played this game today. Please try again tomorrow.",
         )
 
+    # Select the reward on the backend.
     reward = _select_game_reward()
     coupon_code = None
 
-    # Generate a unique coupon for winning rewards.
+    # Create a coupon only when the player wins a discount.
     if reward["type"] in {"percent", "flat"}:
         for _ in range(5):
             candidate = "SF" + secrets.token_hex(5).upper()
 
-            if not await db.coupons.find_one({"code": candidate}):
+            existing_coupon = await db.coupons.find_one(
+                {"code": candidate}
+            )
+
+            if not existing_coupon:
                 coupon_code = candidate
                 break
 
@@ -1788,7 +1796,9 @@ async def play_reward_game(
             "value": reward["value"],
             "min_order": 0,
             "max_uses": 1,
-            "expires_at": (now + timedelta(days=7)).isoformat(),
+            "expires_at": (
+                now + timedelta(days=7)
+            ).isoformat(),
             "active": True,
             "uses": 0,
             "created_at": now.isoformat(),
@@ -1799,39 +1809,43 @@ async def play_reward_game(
 
         await db.coupons.insert_one(coupon_doc)
 
-    # Save the attempt, including losing attempts.
-   claim_doc = {
-    "guest_hash": guest_hash,
-    "game": game,
-    "day_key": now.strftime("%Y-%m-%d"),
-    "reward_label": reward["label"],
-    "coupon_code": coupon_code,
-    "created_at": now.isoformat(),
-}
-    try:
-    await db.game_claims.insert_one(claim_doc)
-except Exception as exc:
-    # Remove the unused coupon if this claim could not be saved.
-    if coupon_code:
-        await db.coupons.delete_one({
-            "code": coupon_code,
-            "source": "reward_game",
-            "guest_hash": guest_hash,
-        })
+    # Record both winning and losing attempts.
+    claim_doc = {
+        "guest_hash": guest_hash,
+        "game": game,
+        "day_key": day_key,
+        "reward_label": reward["label"],
+        "coupon_code": coupon_code,
+        "created_at": now.isoformat(),
+    }
 
-    if getattr(exc, "code", None) == 11000:
+    try:
+        await db.game_claims.insert_one(claim_doc)
+
+    except Exception as exc:
+        # Remove the generated coupon if saving the claim fails.
+        if coupon_code:
+            await db.coupons.delete_one(
+                {
+                    "code": coupon_code,
+                    "source": "reward_game",
+                    "guest_hash": guest_hash,
+                }
+            )
+
+        # The unique database index prevents duplicate daily claims.
+        if getattr(exc, "code", None) == 11000:
+            raise HTTPException(
+                status_code=429,
+                detail="You've already played this game today. Please try again tomorrow.",
+            ) from exc
+
         raise HTTPException(
-            status_code=429,
-            detail="You've already played this game today. Please try again tomorrow.",
+            status_code=500,
+            detail="We couldn't save your game result. Please try again.",
         ) from exc
 
-    raise HTTPException(
-        status_code=500,
-        detail="We couldn't save your game result. Please try again.",
-    ) from exc
-
-
-    # Persist a newly generated guest ID in a browser cookie.
+    # Save the guest identifier in the browser cookie.
     response.set_cookie(
         key="satthamma_game_guest",
         value=guest_id,
@@ -1842,6 +1856,7 @@ except Exception as exc:
         path="/",
     )
 
+    # Return the result to the frontend.
     return {
         "game": game,
         "reward": reward["label"],
@@ -1858,6 +1873,8 @@ except Exception as exc:
             else "Better luck next time!"
         ),
     }
+
+
     
 
 # --- Banners ---
