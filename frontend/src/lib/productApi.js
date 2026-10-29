@@ -23,3 +23,12 @@ export async function fetchFrequentlyBoughtTogether(productId) {
   );
   return data;
 }
+export async function playRewardGame(game) {
+  const { data } = await axios.post(
+    `${API}/games/play`,
+    { game },
+    { withCredentials: true }
+  );
+
+  return data;
+}
