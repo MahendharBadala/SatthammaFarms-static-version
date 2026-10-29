@@ -1910,8 +1910,8 @@ async def play_reward_game(
         )
 
 # Load the latest administrator-configured settings.
-settings = await db.game_settings.find_one(
-    {"_id": "reward_games"}
+     settings = await db.game_settings.find_one(
+         {"_id": "reward_games"}
 )
 
     if not settings:
@@ -1935,7 +1935,7 @@ settings = await db.game_settings.find_one(
             detail="Reward game settings are invalid.",
         )
 
-valid_rewards = []
+        valid_rewards = []
 
 for item in rewards:
     if not isinstance(item, dict):
@@ -1991,9 +1991,9 @@ for item in rewards:
         )
 
 # Validate coupon settings.
-expiry_days = settings.get("coupon_expiry_days", 7)
-minimum_order = settings.get("minimum_order", 0)
-max_uses = settings.get("coupon_max_uses", 1)
+    expiry_days = settings.get("coupon_expiry_days", 7)
+    minimum_order = settings.get("minimum_order", 0)
+    max_uses = settings.get("coupon_max_uses", 1)
 
     if (
         isinstance(expiry_days, bool)
@@ -2012,20 +2012,20 @@ max_uses = settings.get("coupon_max_uses", 1)
         )
 
 # Get or create the guest browser identifier.
-guest_id = _get_game_guest_id(request)
-guest_hash = _hash_game_guest_id(guest_id)
+    guest_id = _get_game_guest_id(request)
+    guest_hash = _hash_game_guest_id(guest_id)
 
-now = datetime.now(timezone.utc)
-day_key = now.strftime("%Y-%m-%d")
+    now = datetime.now(timezone.utc)
+    day_key = now.strftime("%Y-%m-%d")
 
 # Check whether this browser has already played this game today.
-existing = await db.game_claims.find_one(
-    {
-        "guest_hash": guest_hash,
-        "game": game,
-        "day_key": day_key,
-    }
-)
+    existing = await db.game_claims.find_one(
+        {
+            "guest_hash": guest_hash,
+            "game": game,
+            "day_key": day_key,
+        }
+    )  
 
     if existing:
         raise HTTPException(
@@ -2038,8 +2038,8 @@ existing = await db.game_claims.find_one(
         {**settings, "rewards": valid_rewards}
     )
 
-coupon_code = None
-expires_at = None
+    coupon_code = None
+    expires_at = None
 
 # Create a coupon only when the player wins a discount.
     if reward["type"] in {"percent", "flat"}:
@@ -2050,15 +2050,15 @@ expires_at = None
                 {"code": candidate}
             )
 
-        if not existing_coupon:
-            coupon_code = candidate
+            if not existing_coupon:
+                coupon_code = candidate
             break
 
-        if not coupon_code:
-            raise HTTPException(
-                status_code=500,
-                detail="Could not generate a coupon. Please try again.",
-            )
+            if not coupon_code:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not generate a coupon. Please try again.",
+                )
 
     expires_at = (
         now + timedelta(days=expiry_days)
@@ -2082,14 +2082,14 @@ expires_at = None
     await db.coupons.insert_one(coupon_doc)
 
 # Record both winning and losing attempts.
-claim_doc = {
-    "guest_hash": guest_hash,
-    "game": game,
-    "day_key": day_key,
-    "reward_label": reward["label"],
-    "coupon_code": coupon_code,
-    "created_at": now.isoformat(),
-}
+    claim_doc = {
+        "guest_hash": guest_hash,
+        "game": game,
+        "day_key": day_key,
+        "reward_label": reward["label"],
+        "coupon_code": coupon_code,
+        "created_at": now.isoformat(),
+    }
 
 try:
     await db.game_claims.insert_one(claim_doc)
@@ -2118,15 +2118,15 @@ except Exception as exc:
     ) from exc
 
 # Save the guest identifier in the browser cookie.
-response.set_cookie(
-    key="satthamma_game_guest",
-    value=guest_id,
-    max_age=60 * 60 * 24 * 365,
-    httponly=True,
-    secure=True,
-    samesite="none",
-    path="/",
-)
+    response.set_cookie(
+        key="satthamma_game_guest",
+        value=guest_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
 
 # Return the result to the frontend.
 return {
