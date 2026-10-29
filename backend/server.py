@@ -167,7 +167,8 @@ class CouponValidateIn(BaseModel):
 
 class GamePlayIn(BaseModel):
     game: str
-    def _get_game_guest_id(request: Request) -> str:
+    
+def _get_game_guest_id(request: Request) -> str:
     guest_id = request.cookies.get("satthamma_game_guest")
 
     if not guest_id or len(guest_id) > 100:
