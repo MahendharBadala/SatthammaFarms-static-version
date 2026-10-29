@@ -1901,144 +1901,246 @@ async def play_reward_game(
     request: Request,
     response: Response,
 ):
-    game = (payload.game or "").strip().lower()
+game = (payload.game or "").strip().lower()
 
-    if game not in {"spin", "scratch"}:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid game. Use 'spin' or 'scratch'.",
-        )
-
-    # Get or create a guest browser identifier.
-    guest_id = _get_game_guest_id(request)
-    guest_hash = _hash_game_guest_id(guest_id)
-
-    now = datetime.now(timezone.utc)
-    day_key = now.strftime("%Y-%m-%d")
-
-    # Check whether this browser has already played this game today.
-    existing = await db.game_claims.find_one(
-        {
-            "guest_hash": guest_hash,
-            "game": game,
-            "day_key": day_key,
-        }
+if game not in {"spin", "scratch"}:
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid game. Use 'spin' or 'scratch'.",
     )
 
-    if existing:
+# Load the latest administrator-configured settings.
+settings = await db.game_settings.find_one(
+    {"_id": "reward_games"}
+)
+
+if not settings:
+    settings = DEFAULT_GAME_SETTINGS.copy()
+
+# Check whether this particular game is enabled.
+enabled_key = "spin_enabled" if game == "spin" else "scratch_enabled"
+
+if not settings.get(enabled_key, True):
+    raise HTTPException(
+        status_code=403,
+        detail="This reward game is currently disabled.",
+    )
+
+# Validate configured rewards before using them.
+rewards = settings.get("rewards")
+
+if not isinstance(rewards, list) or not rewards:
+    raise HTTPException(
+        status_code=500,
+        detail="Reward game settings are invalid.",
+    )
+
+valid_rewards = []
+
+for item in rewards:
+    if not isinstance(item, dict):
         raise HTTPException(
-            status_code=429,
-            detail="You've already played this game today. Please try again tomorrow.",
+            status_code=500,
+            detail="Reward game settings are invalid.",
         )
 
-    # Select the reward on the backend.
-    reward = _select_game_reward()
-    coupon_code = None
+    reward_type = item.get("type")
+    label = item.get("label")
+    value = item.get("value")
+    weight = item.get("weight")
 
-    # Create a coupon only when the player wins a discount.
-    if reward["type"] in {"percent", "flat"}:
-        for _ in range(5):
-            candidate = "SF" + secrets.token_hex(5).upper()
+    if reward_type not in {"percent", "flat", "none"}:
+        raise HTTPException(
+            status_code=500,
+            detail="Reward game settings are invalid.",
+        )
 
-            existing_coupon = await db.coupons.find_one(
-                {"code": candidate}
-            )
+    if not isinstance(label, str) or not label.strip():
+        raise HTTPException(
+            status_code=500,
+            detail="Reward game settings are invalid.",
+        )
 
-            if not existing_coupon:
-                coupon_code = candidate
-                break
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or value < 0
+        or (reward_type == "percent" and value > 100)
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="Reward game settings are invalid.",
+        )
 
-        if not coupon_code:
-            raise HTTPException(
-                status_code=500,
-                detail="Could not generate a coupon. Please try again.",
-            )
+    if (
+        isinstance(weight, bool)
+        or not isinstance(weight, (int, float))
+        or weight < 0
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="Reward game settings are invalid.",
+        )
 
-        coupon_doc = {
-            "code": coupon_code,
-            "type": reward["type"],
-            "value": reward["value"],
-            "min_order": 0,
-            "max_uses": 1,
-            "expires_at": (
-                now + timedelta(days=7)
-            ).isoformat(),
-            "active": True,
-            "uses": 0,
-            "created_at": now.isoformat(),
-            "source": "reward_game",
-            "game": game,
-            "guest_hash": guest_hash,
-        }
+    valid_rewards.append(item)
 
-        await db.coupons.insert_one(coupon_doc)
+if sum(float(item["weight"]) for item in valid_rewards) <= 0:
+    raise HTTPException(
+        status_code=500,
+        detail="Reward game settings are invalid.",
+    )
 
-    # Record both winning and losing attempts.
-    claim_doc = {
+# Validate coupon settings.
+expiry_days = settings.get("coupon_expiry_days", 7)
+minimum_order = settings.get("minimum_order", 0)
+max_uses = settings.get("coupon_max_uses", 1)
+
+if (
+    isinstance(expiry_days, bool)
+    or not isinstance(expiry_days, int)
+    or expiry_days < 1
+    or isinstance(minimum_order, bool)
+    or not isinstance(minimum_order, (int, float))
+    or minimum_order < 0
+    or isinstance(max_uses, bool)
+    or not isinstance(max_uses, int)
+    or max_uses < 1
+):
+    raise HTTPException(
+        status_code=500,
+        detail="Coupon settings are invalid.",
+    )
+
+# Get or create the guest browser identifier.
+guest_id = _get_game_guest_id(request)
+guest_hash = _hash_game_guest_id(guest_id)
+
+now = datetime.now(timezone.utc)
+day_key = now.strftime("%Y-%m-%d")
+
+# Check whether this browser has already played this game today.
+existing = await db.game_claims.find_one(
+    {
         "guest_hash": guest_hash,
         "game": game,
         "day_key": day_key,
-        "reward_label": reward["label"],
-        "coupon_code": coupon_code,
-        "created_at": now.isoformat(),
     }
+)
 
-    try:
-        await db.game_claims.insert_one(claim_doc)
-
-    except Exception as exc:
-        # Remove the generated coupon if saving the claim fails.
-        if coupon_code:
-            await db.coupons.delete_one(
-                {
-                    "code": coupon_code,
-                    "source": "reward_game",
-                    "guest_hash": guest_hash,
-                }
-            )
-
-        # The unique database index prevents duplicate daily claims.
-        if getattr(exc, "code", None) == 11000:
-            raise HTTPException(
-                status_code=429,
-                detail="You've already played this game today. Please try again tomorrow.",
-            ) from exc
-
-        raise HTTPException(
-            status_code=500,
-            detail="We couldn't save your game result. Please try again.",
-        ) from exc
-
-    # Save the guest identifier in the browser cookie.
-    response.set_cookie(
-        key="satthamma_game_guest",
-        value=guest_id,
-        max_age=60 * 60 * 24 * 365,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
+if existing:
+    raise HTTPException(
+        status_code=429,
+        detail="You've already played this game today. Please try again tomorrow.",
     )
 
-    # Return the result to the frontend.
-    return {
+# Select the reward using administrator-configured probabilities.
+reward = _select_game_reward(
+    {**settings, "rewards": valid_rewards}
+)
+
+coupon_code = None
+expires_at = None
+
+# Create a coupon only when the player wins a discount.
+if reward["type"] in {"percent", "flat"}:
+    for _ in range(5):
+        candidate = "SF" + secrets.token_hex(5).upper()
+
+        existing_coupon = await db.coupons.find_one(
+            {"code": candidate}
+        )
+
+        if not existing_coupon:
+            coupon_code = candidate
+            break
+
+    if not coupon_code:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not generate a coupon. Please try again.",
+        )
+
+    expires_at = (
+        now + timedelta(days=expiry_days)
+    ).isoformat()
+
+    coupon_doc = {
+        "code": coupon_code,
+        "type": reward["type"],
+        "value": reward["value"],
+        "min_order": minimum_order,
+        "max_uses": max_uses,
+        "expires_at": expires_at,
+        "active": True,
+        "uses": 0,
+        "created_at": now.isoformat(),
+        "source": "reward_game",
         "game": game,
-        "reward": reward["label"],
-        "won": coupon_code is not None,
-        "coupon_code": coupon_code,
-        "expires_at": (
-            (now + timedelta(days=7)).isoformat()
-            if coupon_code
-            else None
-        ),
-        "message": (
-            "Congratulations! Your coupon is ready."
-            if coupon_code
-            else "Better luck next time!"
-        ),
+        "guest_hash": guest_hash,
     }
 
+    await db.coupons.insert_one(coupon_doc)
 
+# Record both winning and losing attempts.
+claim_doc = {
+    "guest_hash": guest_hash,
+    "game": game,
+    "day_key": day_key,
+    "reward_label": reward["label"],
+    "coupon_code": coupon_code,
+    "created_at": now.isoformat(),
+}
+
+try:
+    await db.game_claims.insert_one(claim_doc)
+
+except Exception as exc:
+    # Remove the generated coupon if saving the claim fails.
+    if coupon_code:
+        await db.coupons.delete_one(
+            {
+                "code": coupon_code,
+                "source": "reward_game",
+                "guest_hash": guest_hash,
+            }
+        )
+
+    # The unique database index prevents duplicate daily claims.
+    if getattr(exc, "code", None) == 11000:
+        raise HTTPException(
+            status_code=429,
+            detail="You've already played this game today. Please try again tomorrow.",
+        ) from exc
+
+    raise HTTPException(
+        status_code=500,
+        detail="We couldn't save your game result. Please try again.",
+    ) from exc
+
+# Save the guest identifier in the browser cookie.
+response.set_cookie(
+    key="satthamma_game_guest",
+    value=guest_id,
+    max_age=60 * 60 * 24 * 365,
+    httponly=True,
+    secure=True,
+    samesite="none",
+    path="/",
+)
+
+# Return the result to the frontend.
+return {
+    "game": game,
+    "reward": reward["label"],
+    "won": coupon_code is not None,
+    "coupon_code": coupon_code,
+    "expires_at": expires_at,
+    "message": (
+        "Congratulations! Your coupon is ready."
+        if coupon_code
+        else "Better luck next time!"
+    ),
+}
     
 
 # --- Banners ---
