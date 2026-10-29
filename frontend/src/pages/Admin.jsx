@@ -16,7 +16,7 @@ import {
   SiteSettingsPanel,
   ReviewsManager,
 } from "../components/admin/AdminSections";
-
+import RewardGamesManager from "../components/admin/RewardGamesManager";
 import {
   fetchAdminReviews,
   approveReview,
@@ -545,6 +545,7 @@ const tabs = [
   />
 )}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
+      {tab === "games" && <RewardGamesManager />}
       {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} deletingIds={deletingIds} />}
       {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
       {tab === "payments" && <PaymentSettingsPanel settings={settings} onSave={async (payload) => {
