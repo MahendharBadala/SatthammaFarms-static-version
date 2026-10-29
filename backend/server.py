@@ -167,6 +167,41 @@ class CouponValidateIn(BaseModel):
 
 class GamePlayIn(BaseModel):
     game: str
+
+class GameSettingsIn(BaseModel):
+    spin_enabled: bool = True
+    scratch_enabled: bool = True
+
+    rewards: list[dict] = [
+        {
+            "label": "5% OFF",
+            "type": "percent",
+            "value": 5,
+            "weight": 35,
+        },
+        {
+            "label": "10% OFF",
+            "type": "percent",
+            "value": 10,
+            "weight": 15,
+        },
+        {
+            "label": "₹50 OFF",
+            "type": "flat",
+            "value": 50,
+            "weight": 10,
+        },
+        {
+            "label": "Better luck next time",
+            "type": "none",
+            "value": 0,
+            "weight": 40,
+        },
+    ]
+
+    coupon_expiry_days: int = 7
+    minimum_order: float = 0
+    coupon_max_uses: int = 1
     
 def _get_game_guest_id(request: Request) -> str:
     guest_id = request.cookies.get("satthamma_game_guest")
@@ -1722,6 +1757,137 @@ async def admin_update_coupon(cid: str, payload: CouponIn, _admin: dict = Depend
     if not doc:
         raise HTTPException(status_code=404, detail="Coupon not found")
     return _coupon_to_out(doc)
+
+DEFAULT_GAME_SETTINGS = {
+    "spin_enabled": True,
+    "scratch_enabled": True,
+    "rewards": [
+        {
+            "label": "5% OFF",
+            "type": "percent",
+            "value": 5,
+            "weight": 35,
+        },
+        {
+            "label": "10% OFF",
+            "type": "percent",
+            "value": 10,
+            "weight": 15,
+        },
+        {
+            "label": "₹50 OFF",
+            "type": "flat",
+            "value": 50,
+            "weight": 10,
+        },
+        {
+            "label": "Better luck next time",
+            "type": "none",
+            "value": 0,
+            "weight": 40,
+        },
+    ],
+    "coupon_expiry_days": 7,
+    "minimum_order": 0,
+    "coupon_max_uses": 1,
+}
+
+
+@api.get("/admin/game-settings")
+async def admin_get_game_settings(
+    _admin: dict = Depends(get_admin_user),
+):
+    settings = await db.game_settings.find_one(
+        {"_id": "reward_games"}
+    )
+
+    if not settings:
+        return DEFAULT_GAME_SETTINGS.copy()
+
+    settings.pop("_id", None)
+
+    return settings
+
+
+@api.put("/admin/game-settings")
+async def admin_update_game_settings(
+    payload: GameSettingsIn,
+    _admin: dict = Depends(get_admin_user),
+):
+    settings = payload.model_dump()
+
+    if settings["coupon_expiry_days"] < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Coupon expiry must be at least 1 day.",
+        )
+
+    if settings["coupon_max_uses"] < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Coupon maximum uses must be at least 1.",
+        )
+
+    if settings["minimum_order"] < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Minimum order cannot be negative.",
+        )
+
+    if not settings["rewards"]:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one reward is required.",
+        )
+
+    for reward in settings["rewards"]:
+        if reward.get("type") not in {"percent", "flat", "none"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Reward type must be percent, flat, or none.",
+            )
+
+        if not isinstance(reward.get("label"), str) or not reward["label"].strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Every reward must have a label.",
+            )
+
+        if reward.get("value", -1) < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Reward values cannot be negative.",
+            )
+
+        if reward.get("weight", 0) < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Reward weights cannot be negative.",
+            )
+
+        if reward["type"] == "percent" and reward["value"] > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Percentage discounts cannot exceed 100.",
+            )
+
+    if sum(reward["weight"] for reward in settings["rewards"]) <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="The total reward weight must be greater than zero.",
+        )
+
+    await db.game_settings.update_one(
+        {"_id": "reward_games"},
+        {"$set": settings},
+        upsert=True,
+    )
+
+    return {
+        "message": "Reward game settings saved successfully.",
+        "settings": settings,
+    }
+
 
 @api.delete("/admin/coupons/{cid}")
 async def admin_delete_coupon(cid: str, _admin: dict = Depends(get_admin_user)):
