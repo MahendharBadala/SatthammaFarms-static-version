@@ -1901,39 +1901,39 @@ async def play_reward_game(
     request: Request,
     response: Response,
 ):
-game = (payload.game or "").strip().lower()
+    game = (payload.game or "").strip().lower()
 
-if game not in {"spin", "scratch"}:
-    raise HTTPException(
-        status_code=400,
-        detail="Invalid game. Use 'spin' or 'scratch'.",
-    )
+    if game not in {"spin", "scratch"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid game. Use 'spin' or 'scratch'.",
+        )
 
 # Load the latest administrator-configured settings.
 settings = await db.game_settings.find_one(
     {"_id": "reward_games"}
 )
 
-if not settings:
-    settings = DEFAULT_GAME_SETTINGS.copy()
+    if not settings:
+        settings = DEFAULT_GAME_SETTINGS.copy()
 
 # Check whether this particular game is enabled.
-enabled_key = "spin_enabled" if game == "spin" else "scratch_enabled"
+    enabled_key = "spin_enabled" if game == "spin" else "scratch_enabled"
 
-if not settings.get(enabled_key, True):
-    raise HTTPException(
+    if not settings.get(enabled_key, True):
+        raise HTTPException(
         status_code=403,
         detail="This reward game is currently disabled.",
     )
 
 # Validate configured rewards before using them.
-rewards = settings.get("rewards")
+    rewards = settings.get("rewards")
 
-if not isinstance(rewards, list) or not rewards:
-    raise HTTPException(
-        status_code=500,
-        detail="Reward game settings are invalid.",
-    )
+    if not isinstance(rewards, list) or not rewards:
+        raise HTTPException(
+            status_code=500,
+            detail="Reward game settings are invalid.",
+        )
 
 valid_rewards = []
 
@@ -1984,32 +1984,32 @@ for item in rewards:
 
     valid_rewards.append(item)
 
-if sum(float(item["weight"]) for item in valid_rewards) <= 0:
-    raise HTTPException(
-        status_code=500,
-        detail="Reward game settings are invalid.",
-    )
+    if sum(float(item["weight"]) for item in valid_rewards) <= 0:
+        raise HTTPException(
+            status_code=500,
+            detail="Reward game settings are invalid.",
+        )
 
 # Validate coupon settings.
 expiry_days = settings.get("coupon_expiry_days", 7)
 minimum_order = settings.get("minimum_order", 0)
 max_uses = settings.get("coupon_max_uses", 1)
 
-if (
-    isinstance(expiry_days, bool)
-    or not isinstance(expiry_days, int)
-    or expiry_days < 1
-    or isinstance(minimum_order, bool)
-    or not isinstance(minimum_order, (int, float))
-    or minimum_order < 0
-    or isinstance(max_uses, bool)
-    or not isinstance(max_uses, int)
-    or max_uses < 1
-):
-    raise HTTPException(
-        status_code=500,
-        detail="Coupon settings are invalid.",
-    )
+    if (
+        isinstance(expiry_days, bool)
+        or not isinstance(expiry_days, int)
+        or expiry_days < 1
+        or isinstance(minimum_order, bool)
+        or not isinstance(minimum_order, (int, float))
+        or minimum_order < 0
+        or isinstance(max_uses, bool)
+        or not isinstance(max_uses, int)
+        or max_uses < 1
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="Coupon settings are invalid.",
+        )
 
 # Get or create the guest browser identifier.
 guest_id = _get_game_guest_id(request)
@@ -2027,38 +2027,38 @@ existing = await db.game_claims.find_one(
     }
 )
 
-if existing:
-    raise HTTPException(
-        status_code=429,
-        detail="You've already played this game today. Please try again tomorrow.",
-    )
+    if existing:
+        raise HTTPException(
+            status_code=429,
+            detail="You've already played this game today. Please try again tomorrow.",
+        )
 
 # Select the reward using administrator-configured probabilities.
-reward = _select_game_reward(
-    {**settings, "rewards": valid_rewards}
-)
+    reward = _select_game_reward(
+        {**settings, "rewards": valid_rewards}
+    )
 
 coupon_code = None
 expires_at = None
 
 # Create a coupon only when the player wins a discount.
-if reward["type"] in {"percent", "flat"}:
-    for _ in range(5):
-        candidate = "SF" + secrets.token_hex(5).upper()
+    if reward["type"] in {"percent", "flat"}:
+        for _ in range(5):
+            candidate = "SF" + secrets.token_hex(5).upper()
 
-        existing_coupon = await db.coupons.find_one(
-            {"code": candidate}
-        )
+            existing_coupon = await db.coupons.find_one(
+                {"code": candidate}
+            )
 
         if not existing_coupon:
             coupon_code = candidate
             break
 
-    if not coupon_code:
-        raise HTTPException(
-            status_code=500,
-            detail="Could not generate a coupon. Please try again.",
-        )
+        if not coupon_code:
+            raise HTTPException(
+                status_code=500,
+                detail="Could not generate a coupon. Please try again.",
+            )
 
     expires_at = (
         now + timedelta(days=expiry_days)
