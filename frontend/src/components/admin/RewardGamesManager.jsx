@@ -27,7 +27,6 @@ const [notice, setNotice] = useState("");
 useEffect(() => {
 let cancelled = false;
 
-```
 async function loadSettings() {
   try {
     const response = await axios.get(`${API}/admin/game-settings`, {
@@ -55,7 +54,6 @@ loadSettings();
 return () => {
   cancelled = true;
 };
-```
 
 }, []);
 
