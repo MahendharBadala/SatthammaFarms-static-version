@@ -245,16 +245,18 @@ export default function Admin() {
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to save"); }
   };
 
- const tabs = [
-  { k: "products", label: "Products" },
-  { k: "orders", label: "Orders" },
-  { k: "reviews", label: "Reviews" },
-  { k: "coupons", label: "Coupons" },
-  { k: "banners", label: "Banners" },
-  { k: "site", label: "Site content" },
-  { k: "payments", label: "Payments" },
-  { k: "recommended", label: "Recommended" },
+const tabs = [
+    { k: "products", label: "Products" },
+    { k: "orders", label: "Orders" },
+    { k: "reviews", label: "Reviews" },
+    { k: "coupons", label: "Coupons" },
+    { k: "games", label: "Reward Games" },
+    { k: "banners", label: "Banners" },
+    { k: "site", label: "Site content" },
+    { k: "payments", label: "Payments" },
+    { k: "recommended", label: "Recommended" },
 ];
+
 
   return (
     <div className="container mx-auto py-12">
