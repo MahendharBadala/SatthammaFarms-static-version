@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   playRewardGame,
   getPreviousGameResult,
@@ -99,6 +99,156 @@ function LuckySpinWheel({ rewards, spinning, rotation }) {
       <div className="absolute left-1/2 top-1/2 z-10 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-amber-400 bg-white text-2xl shadow-lg">
         🌾
       </div>
+
+    </div>
+  );
+}
+
+// --------------------------------------------------
+// SCRATCH & WIN INTERACTIVE CARD
+// --------------------------------------------------
+
+function ScratchCard({ onReveal, result, disabled }) {
+  const canvasRef = useRef(null);
+  const isScratching = useRef(false);
+  const hasRevealed = useRef(false);
+  const scratchCount = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = 600;
+    canvas.height = 300;
+
+    ctx.fillStyle = "#b8b8b8";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 38px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("SATTHAMMA FARMS", 300, 125);
+
+    ctx.font = "bold 30px Arial";
+    ctx.fillText("SCRATCH HERE!", 300, 185);
+
+    ctx.globalCompositeOperation = "destination-out";
+  }, []);
+
+  async function scratch(event) {
+    if (disabled || hasRevealed.current || !isScratching.current) {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+
+    if (!canvas || !ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+
+    ctx.beginPath();
+    ctx.arc(x, y, 35, 0, Math.PI * 2);
+    ctx.fill();
+
+    scratchCount.current += 1;
+
+    // Check scratch progress periodically.
+    if (scratchCount.current % 8 === 0) {
+      const imageData = ctx.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      let transparentPixels = 0;
+
+      for (let i = 3; i < imageData.data.length; i += 4) {
+        if (imageData.data[i] < 128) {
+          transparentPixels++;
+        }
+      }
+
+      const progress =
+        transparentPixels / (canvas.width * canvas.height);
+
+      if (progress >= 0.45 && !hasRevealed.current) {
+        hasRevealed.current = true;
+        const success = await onReveal();
+
+        if (!success) {
+          hasRevealed.current = false;
+        }
+      }
+    }
+  }
+
+  function startScratch(event) {
+    if (disabled || hasRevealed.current) return;
+
+    isScratching.current = true;
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    scratch(event);
+  }
+
+  function stopScratch() {
+    isScratching.current = false;
+  }
+
+  return (
+    <div className="relative mx-auto mt-6 w-full max-w-sm overflow-hidden rounded-2xl border-4 border-amber-400 bg-gradient-to-br from-green-900 to-green-700 p-4 shadow-xl">
+
+      {/* Reward area underneath the cover */}
+
+      <div className="flex h-36 flex-col items-center justify-center text-center text-white">
+        {result ? (
+          <>
+            <p className="text-sm font-semibold uppercase tracking-widest">
+              Your Reward
+            </p>
+
+            <p className="mt-3 text-3xl font-extrabold text-amber-300">
+              {result.reward}
+            </p>
+          </>
+        ) : (
+          <>
+            <span className="text-4xl">🎁</span>
+
+            <p className="mt-3 font-bold">
+              Your reward is waiting!
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Scratchable cover */}
+
+      {!result && (
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full touch-none cursor-crosshair"
+          onPointerDown={startScratch}
+          onPointerMove={scratch}
+          onPointerUp={stopScratch}
+          onPointerCancel={stopScratch}
+          onLostPointerCapture={stopScratch}
+        />
+      )}
+
+      {disabled && !result && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-center font-bold text-white">
+          Your game has already been played.
+        </div>
+      )}
 
     </div>
   );
@@ -209,20 +359,26 @@ function GameCard({
           />
         )}
 
+      {game === "spin" ? (
         <button
           type="button"
           disabled={Boolean(loadingGame) || Boolean(result)}
           onClick={() => onPlay(game)}
           className="mt-6 w-full rounded-xl bg-green-800 px-5 py-3 font-bold text-white transition hover:bg-green-900 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isLoading
-            ? game === "spin"
-              ? "Spinning..."
-              : "Revealing your result..."
-            : result
-              ? "Played"
-              : buttonText}
-        </button>
+       >
+         {isLoading
+           ? "Spinning..."
+           : result
+             ? "Played"
+             : buttonText}
+       </button>
+    ) : (
+      <ScratchCard
+        onReveal={() => onPlay(game)}
+        result={result}
+        disabled={Boolean(result)}
+      />   
+    )}
 
       </div>
 
@@ -370,6 +526,7 @@ export default function RewardGames() {
         ...previous,
         [game]: result,
       }));
+      return true;
 
     } catch (error) {
       const message =
@@ -382,6 +539,7 @@ export default function RewardGames() {
       }));
 
       setIsSpinning(false);
+      return false;
 
     } finally {
       setLoadingGame("");
