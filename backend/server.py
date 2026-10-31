@@ -1914,6 +1914,78 @@ async def get_public_game_settings():
         ),
     }
 
+@api.get("/games/result/{game}")
+async def get_previous_game_result(
+    game: str,
+    request: Request,
+    response: Response,
+):
+    game = (game or "").strip().lower()
+
+    if game not in {"spin", "scratch"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid game.",
+        )
+
+    guest_id = _get_game_guest_id(request)
+    guest_hash = _hash_game_guest_id(guest_id)
+
+    now = datetime.now(timezone.utc)
+    day_key = now.strftime("%Y-%m-%d")
+
+    claim = await db.game_claims.find_one({
+        "guest_hash": guest_hash,
+        "game": game,
+        "day_key": day_key,
+    })
+
+    response.set_cookie(
+        key="satthamma_game_guest",
+        value=guest_id,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+
+    if not claim:
+        return {
+            "played": False,
+            "result": None,
+        }
+
+    coupon_code = claim.get("coupon_code")
+    coupon = None
+
+    if coupon_code:
+        coupon = await db.coupons.find_one({
+            "code": coupon_code,
+            "source": "reward_game",
+            "guest_hash": guest_hash,
+        })
+
+    return {
+        "played": True,
+        "result": {
+            "game": game,
+            "reward": claim.get("reward_label", ""),
+            "won": bool(coupon_code),
+            "coupon_code": coupon_code if coupon else None,
+            "expires_at": coupon.get("expires_at") if coupon else None,
+            "message": (
+                "Congratulations! Your coupon is ready."
+                if coupon_code and coupon
+                else (
+                    "Your reward was already claimed."
+                    if coupon_code
+                    else "Better luck next time!"
+                )
+            ),
+        },
+    }
+
 
 @api.post("/games/play")
 async def play_reward_game(
