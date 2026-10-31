@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   playRewardGame,
   getPreviousGameResult,
+  getPublicGameSettings,
 } from "../lib/productApi";
 
 export default function RewardGames() {
@@ -14,6 +15,10 @@ export default function RewardGames() {
     spin: "",
     scratch: "",
   });
+
+  const [gameSettings, setGameSettings] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState("");
 
   useEffect(() => {
   async function loadPreviousResults() {
@@ -41,6 +46,23 @@ export default function RewardGames() {
   loadPreviousResults();
 }, []);
 
+  useEffect(() => {
+  async function loadGameSettings() {
+    try {
+      const data = await getPublicGameSettings();
+      setGameSettings(data);
+    } catch (error) {
+      console.error("Failed to load game settings:", error);
+      setSettingsError("Unable to load reward games. Please refresh.");
+    } finally {
+      setSettingsLoading(false);
+    }
+  }
+
+  loadGameSettings();
+}, []);
+
+  
   async function handlePlay(game) {
     if (loadingGame) return;
 
