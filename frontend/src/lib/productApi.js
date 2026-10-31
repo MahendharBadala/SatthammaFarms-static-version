@@ -41,3 +41,11 @@ export async function getPreviousGameResult(game) {
 
   return data;
 }
+
+export async function getPublicGameSettings() {
+  const { data } = await axios.get(
+    `${API}/games/settings`
+  );
+
+  return data;
+}
