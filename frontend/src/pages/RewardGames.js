@@ -646,9 +646,7 @@ export default function RewardGames() {
 
         <p className="mx-auto mt-8 max-w-2xl text-center text-xs leading-5 text-gray-500">
           Rewards are determined by the server. Each game can be
-          played once per browser per day. Browser-based restrictions
-          are not foolproof and may be bypassed by clearing browser
-          data or using another device.
+          played once per day.
         </p>
 
       </div>
