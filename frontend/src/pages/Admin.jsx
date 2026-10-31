@@ -61,7 +61,7 @@ export default function Admin() {
 
   const load = useCallback(async () => {
   const [p, o, s, c, b, si, r] = await Promise.all([
-  axios.get(`${API}/products`),
+  axios.get(`${API}/admin/products`),
   axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
   axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
   axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
