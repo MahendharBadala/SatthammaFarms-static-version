@@ -78,6 +78,14 @@ class LoginInput(BaseModel):
     email: EmailStr
     password: str
 
+class ProductVariantIn(BaseModel):
+    weight_label: str
+    weight_grams: int
+    price: float
+    mrp: Optional[float] = None
+    enabled: bool = True
+    sort_order: int = 0
+    
 class ProductIn(BaseModel):
     name: str
     category: str
@@ -86,14 +94,20 @@ class ProductIn(BaseModel):
     description: str = ""
     image_url: str = ""
     video_url: Optional[str] = None
-    gallery: List[str] = []
-    stock: int = 100
-    featured: bool = False
-    related_product_ids: List[str] = []
+    gallery: List[str] = Field(default_factory=list)
 
-    # Admin-selected product recommendations
-    related_product_ids: List[str] = []
-    frequently_bought_together_ids: List[str] = []
+    # Existing stock field retained for backward compatibility
+    stock: int = 100
+
+    # New shared inventory, stored in grams
+    stock_grams: Optional[int] = None
+
+    # Custom weight and price options
+    variants: List[ProductVariantIn] = Field(default_factory=list)
+
+    featured: bool = False
+    related_product_ids: List[str] = Field(default_factory=list)
+    frequently_bought_together_ids: List[str] = Field(default_factory=list)
 
 class ProductOut(ProductIn):
     id: str
@@ -102,6 +116,9 @@ class ProductOut(ProductIn):
 class CartItemIn(BaseModel):
     product_id: str
     quantity: int = 1
+
+    # Selected product variant weight, stored in grams
+    variant_weight_grams: Optional[int] = None
 
 class OrderIn(BaseModel):
     items: List[CartItemIn]
@@ -480,7 +497,12 @@ def product_to_out(doc: dict) -> dict:
         "image_url": doc.get("image_url", ""),
         "video_url": doc.get("video_url", ""),
         "gallery": list(doc.get("gallery", []) or []),
-        "stock": int(doc.get("stock", 0)),
+        "stock_available": int(
+            doc.get("stock_grams")
+            if doc.get("stock_grams") is not None
+            else doc.get("stock", 0)
+        ) > 0,
+        "variants": list(doc.get("variants", []) or []),
         "featured": bool(doc.get("featured", False)),
         "created_at": doc.get("created_at", ""),
         
@@ -512,6 +534,8 @@ async def list_products(
             "description": 1,
             "image_url": 1,
             "stock": 1,
+            "stock_grams": 1,
+            "variants": 1,
             "featured": 1,
             "created_at": 1,
         },
@@ -526,12 +550,53 @@ async def list_products(
             "unit": doc.get("unit", "kg"),
             "description": doc.get("description", ""),
             "image_url": doc.get("image_url", ""),
-            "stock": int(doc.get("stock", 0)),
+            "stock_available": int(
+                doc.get("stock_grams")
+                if doc.get("stock_grams") is not None
+                else doc.get("stock", 0)
+            ) > 0,
+            "variants": list(doc.get("variants", []) or []),
             "featured": bool(doc.get("featured", False)),
             "created_at": doc.get("created_at", ""),
         }
         for doc in docs
     ]
+
+# Admin-only product listing with complete inventory details
+@api.get("/admin/products")
+async def admin_list_products(
+    _admin: dict = Depends(get_admin_user),
+):
+    docs = await db.products.find({}).sort(
+        "created_at", -1
+    ).to_list(500)
+
+    return [
+        {
+            "id": str(doc["_id"]),
+            "name": doc.get("name", ""),
+            "category": doc.get("category", ""),
+            "price": float(doc.get("price", 0)),
+            "unit": doc.get("unit", "kg"),
+            "description": doc.get("description", ""),
+            "image_url": doc.get("image_url", ""),
+            "video_url": doc.get("video_url", ""),
+            "gallery": list(doc.get("gallery", []) or []),
+            "stock": int(doc.get("stock", 0)),
+            "stock_grams": doc.get("stock_grams"),
+            "variants": list(doc.get("variants", []) or []),
+            "featured": bool(doc.get("featured", False)),
+            "created_at": doc.get("created_at", ""),
+            "related_product_ids": list(
+                doc.get("related_product_ids", []) or []
+            ),
+            "frequently_bought_together_ids": list(
+                doc.get("frequently_bought_together_ids", []) or []
+            ),
+        }
+        for doc in docs
+    ]
+
 
 @api.get("/products/{pid}")
 async def get_product(pid: str):
@@ -772,8 +837,6 @@ async def debug_order_items(_admin: dict = Depends(get_admin_user)):
 
 
 
-
-
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     doc = payload.model_dump()
@@ -788,7 +851,10 @@ async def update_product(pid: str, payload: ProductIn, _admin: dict = Depends(ge
         oid = ObjectId(pid)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid id") from exc
-    await db.products.update_one({"_id": oid}, {"$set": payload.model_dump()})
+    await db.products.update_one(
+        {"_id": oid},
+        {"$set": payload.model_dump(exclude_unset=True)}
+    )
     doc: Optional[dict] = await db.products.find_one({"_id": oid})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
@@ -1507,19 +1573,76 @@ async def create_order(payload: OrderIn, request: Request):
         raise HTTPException(status_code=400, detail="Cart is empty")
     products = await db.products.find({"_id": {"$in": oids}}).to_list(len(oids))
     p_map = {str(p["_id"]): p for p in products}
+    
     for it in payload.items:
         p = p_map.get(it.product_id)
+
         if not p:
-            continue
-        line = float(p["price"]) * int(it.quantity)
+            raise HTTPException(
+                status_code=400,
+                detail="A product in your cart is no longer available."
+            )
+
+        quantity = int(it.quantity)
+
+        if quantity < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Product quantity must be at least 1."
+            )
+
+        enabled_variants = [
+            v for v in (p.get("variants", []) or [])
+            if v.get("enabled", True)
+        ]
+
+        selected_variant = None
+
+        if it.variant_weight_grams is not None:
+            selected_variant = next(
+                (
+                    v for v in enabled_variants
+                    if int(v.get("weight_grams", 0))
+                    == int(it.variant_weight_grams)
+                ),
+                None
+            )
+
+            if not selected_variant:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Selected weight option for {p['name']} is unavailable."
+                )
+
+            unit_price = float(selected_variant["price"])
+            weight_grams = int(selected_variant["weight_grams"])
+            weight_label = selected_variant["weight_label"]
+
+        else:
+            if enabled_variants:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Please select a weight option for {p['name']}."
+                )
+
+        # Backward compatibility for products without variants
+            unit_price = float(p["price"])
+            weight_grams = None
+            weight_label = p.get("unit", "kg")
+
+        line = unit_price * quantity
         total += line
+
         items_full.append({
             "product_id": str(p["_id"]),
             "name": p["name"],
-            "price": float(p["price"]),
-            "quantity": int(it.quantity),
+            "price": unit_price,
+            "quantity": quantity,
+            "variant_weight_grams": weight_grams,
+            "weight_label": weight_label,
             "line_total": line,
         })
+        
     if not items_full:
         raise HTTPException(status_code=400, detail="No valid products in cart")
     # Apply coupon if provided
