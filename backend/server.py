@@ -497,12 +497,18 @@ def product_to_out(doc: dict) -> dict:
         "image_url": doc.get("image_url", ""),
         "video_url": doc.get("video_url", ""),
         "gallery": list(doc.get("gallery", []) or []),
+        
         "stock_available": int(
             doc.get("stock_grams")
             if doc.get("stock_grams") is not None
             else doc.get("stock", 0)
         ) > 0,
-        "variants": list(doc.get("variants", []) or []),
+        
+        "variants": [
+            variant
+            for variant in (doc.get("variants", []) or [])
+            if variant.get("enabled", True)
+        ],
         "featured": bool(doc.get("featured", False)),
         "created_at": doc.get("created_at", ""),
         
@@ -549,13 +555,20 @@ async def list_products(
             "price": float(doc.get("price", 0)),
             "unit": doc.get("unit", "kg"),
             "description": doc.get("description", ""),
-            "image_url": doc.get("image_url", ""),
+            "image_url": doc.get("image_url", ""), 
+            
             "stock_available": int(
                 doc.get("stock_grams")
                 if doc.get("stock_grams") is not None
                 else doc.get("stock", 0)
             ) > 0,
-            "variants": list(doc.get("variants", []) or []),
+            
+            "variants": [
+                variant
+                for variant in (doc.get("variants", []) or [])
+                if variant.get("enabled", True)
+            ],
+            
             "featured": bool(doc.get("featured", False)),
             "created_at": doc.get("created_at", ""),
         }
@@ -834,19 +847,65 @@ async def debug_order_items(_admin: dict = Depends(get_admin_user)):
         for doc in docs
     ]
 
+def validate_product_inventory(payload: ProductIn):
+    # Shared stock cannot be negative
+    if payload.stock_grams is not None and payload.stock_grams < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Product stock cannot be negative."
+        )
 
+    seen_weights = set()
+
+    for variant in payload.variants:
+        if not variant.weight_label.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Variant weight label is required."
+            )
+
+        if variant.weight_grams <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Variant weight must be greater than zero."
+            )
+
+        if variant.price < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Variant price cannot be negative."
+            )
+
+        if variant.mrp is not None and variant.mrp < variant.price:
+            raise HTTPException(
+                status_code=400,
+                detail="Variant MRP cannot be less than its selling price."
+            )
+
+        if variant.weight_grams in seen_weights:
+            raise HTTPException(
+                status_code=400,
+                detail="Duplicate variant weights are not allowed."
+            )
+
+        seen_weights.add(variant.weight_grams)
 
 
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
+    validate_product_inventory(payload)
+    
     doc = payload.model_dump()
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
     res = await db.products.insert_one(doc)
     doc["_id"] = res.inserted_id
     return product_to_out(doc)
 
+
 @api.put("/products/{pid}")
 async def update_product(pid: str, payload: ProductIn, _admin: dict = Depends(get_admin_user)):
+    validate_product_inventory(payload)
+    
     try:
         oid = ObjectId(pid)
     except Exception as exc:
@@ -859,6 +918,7 @@ async def update_product(pid: str, payload: ProductIn, _admin: dict = Depends(ge
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     return product_to_out(doc)
+       
 
 @api.delete("/products/{pid}")
 async def delete_product(pid: str, _admin: dict = Depends(get_admin_user)):
@@ -1751,6 +1811,367 @@ async def confirm_payment(oid: str, payload: OrderConfirmIn, user: dict = Depend
     }})
     return {"ok": True, "status": "payment_pending_verification"}
 
+
+
+def get_order_inventory_requirements(order: dict) -> dict:
+    requirements = {}
+
+    for item in order.get("items", []):
+        product_id = item.get("product_id")
+        weight_grams = item.get("variant_weight_grams")
+        quantity = int(item.get("quantity", 0))
+
+        if not product_id or not weight_grams or quantity <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="This order contains an invalid weight or quantity. Please review it."
+            )
+
+        required_grams = int(weight_grams) * quantity
+
+        requirements[product_id] = (
+            requirements.get(product_id, 0) + required_grams
+        )
+
+    if not requirements:
+        raise HTTPException(
+            status_code=400,
+            detail="This order has no valid inventory items."
+        )
+
+    return requirements
+
+
+async def deduct_order_inventory(order_id: ObjectId, order: dict):
+    # Avoid deducting stock twice for the same order
+    claim = await db.orders.update_one(
+        {
+            "_id": order_id,
+            "inventory_deducted": {"$ne": True},
+            "inventory_processing": {"$ne": True},
+        },
+        {
+            "$set": {
+                "inventory_processing": True,
+                "inventory_processing_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+
+    if claim.modified_count != 1:
+        current_order = await db.orders.find_one({"_id": order_id})
+
+        if current_order and current_order.get("inventory_deducted") is True:
+            return
+
+        raise HTTPException(
+            status_code=409,
+            detail="Inventory processing is already in progress for this order."
+        )
+
+    deducted = []
+
+    try:
+        requirements = get_order_inventory_requirements(order)
+
+        for product_id, required_grams in requirements.items():
+            try:
+                product_oid = ObjectId(product_id)
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid product in order."
+                )
+
+            result = await db.products.update_one(
+                {
+                    "_id": product_oid,
+                    "stock_grams": {"$gte": required_grams},
+                },
+                {
+                    "$inc": {"stock_grams": -required_grams}
+                },
+            )
+
+            if result.modified_count != 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Insufficient stock for one or more products. Order was not confirmed."
+                )
+
+            deducted.append((product_oid, required_grams))
+            await update_low_stock_alert_state(product_oid)
+
+        await db.orders.update_one(
+            {
+                "_id": order_id,
+                "inventory_processing": True,
+            },
+            {
+                "$set": {
+                    "inventory_deducted": True,
+                    "inventory_deducted_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "$unset": {
+                    "inventory_processing": "",
+                    "inventory_processing_at": "",
+                },
+            },
+        )
+
+    except Exception:
+        # Restore any stock already deducted during this attempt
+        for product_oid, required_grams in reversed(deducted):
+            await db.products.update_one(
+                {"_id": product_oid},
+                {"$inc": {"stock_grams": required_grams}},
+            )
+
+        await db.orders.update_one(
+            {"_id": order_id},
+            {
+                "$unset": {
+                    "inventory_processing": "",
+                    "inventory_processing_at": "",
+                }
+            },
+        )
+
+        raise
+
+
+async def restore_order_inventory(order_id: ObjectId, order: dict):
+    # Restore only if stock was previously deducted
+    claim = await db.orders.update_one(
+        {
+            "_id": order_id,
+            "inventory_deducted": True,
+            "inventory_restored": {"$ne": True},
+            "inventory_restoring": {"$ne": True},
+        },
+        {
+            "$set": {
+                "inventory_restoring": True,
+                "inventory_restoring_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+
+    if claim.modified_count != 1:
+        current_order = await db.orders.find_one({"_id": order_id})
+
+        if current_order and current_order.get("inventory_restored") is True:
+            return
+
+        if current_order and current_order.get("inventory_deducted") is not True:
+            return
+
+        raise HTTPException(
+            status_code=409,
+            detail="Inventory restoration is already in progress."
+        )
+
+    restored = []
+
+    try:
+        requirements = get_order_inventory_requirements(order)
+
+        for product_id, required_grams in requirements.items():
+            product_oid = ObjectId(product_id)
+
+            result = await db.products.update_one(
+                {"_id": product_oid},
+                {"$inc": {"stock_grams": required_grams}},
+            )
+
+            if result.modified_count != 1:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not restore inventory for a product."
+                )
+
+            restored.append((product_oid, required_grams))
+            await update_low_stock_alert_state(product_oid)
+        await db.orders.update_one(
+            {
+                "_id": order_id,
+                "inventory_restoring": True,
+            },
+            {
+                "$set": {
+                    "inventory_restored": True,
+                    "inventory_restored_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "$unset": {
+                    "inventory_restoring": "",
+                    "inventory_restoring_at": "",
+                },
+            },
+        )
+
+    except Exception:
+        # Reverse any partial restoration
+        for product_oid, required_grams in reversed(restored):
+            await db.products.update_one(
+                {"_id": product_oid},
+                {"$inc": {"stock_grams": -required_grams}},
+            )
+
+        await db.orders.update_one(
+            {"_id": order_id},
+            {
+                "$unset": {
+                    "inventory_restoring": "",
+                    "inventory_restoring_at": "",
+                }
+            },
+        )
+
+        raise
+
+
+LOW_STOCK_THRESHOLD_GRAMS = 10000
+
+
+async def update_low_stock_alert_state(product_id: ObjectId):
+    product = await db.products.find_one(
+        {"_id": product_id},
+        {
+            "stock_grams": 1,
+            "low_stock_alert_active": 1,
+            "name": 1,
+        }
+    )
+
+    if not product or product.get("stock_grams") is None:
+        return
+
+    stock_grams = int(product.get("stock_grams", 0))
+
+    # Activate alert when stock falls below 10kg.
+    if stock_grams < LOW_STOCK_THRESHOLD_GRAMS:
+        await db.products.update_one(
+            {
+                "_id": product_id,
+                "stock_grams": {"$lt": LOW_STOCK_THRESHOLD_GRAMS},
+                "low_stock_alert_active": {"$ne": True},
+            },
+            {
+                "$set": {
+                    "low_stock_alert_active": True,
+                    "low_stock_alert_created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            },
+        )
+
+    # Reset alert when stock is replenished to 10kg or more.
+    else:
+        await db.products.update_one(
+            {"_id": product_id},
+            {
+                "$set": {"low_stock_alert_active": False},
+                "$unset": {"low_stock_alert_created_at": ""},
+            },
+        )
+
+
+# Admin-only: retrieve products requiring restocking
+@api.get("/admin/low-stock-alerts")
+async def get_low_stock_alerts(
+    _admin: dict = Depends(get_admin_user)
+):
+    docs = await db.products.find(
+        {
+            "low_stock_alert_active": True,
+            "stock_grams": {"$exists": True},
+        },
+        {
+            "name": 1,
+            "category": 1,
+            "stock_grams": 1,
+            "low_stock_alert_created_at": 1,
+        }
+    ).sort("low_stock_alert_created_at", 1).to_list(500)
+
+    return [
+        {
+            "product_id": str(doc["_id"]),
+            "name": doc.get("name", ""),
+            "category": doc.get("category", ""),
+            "stock_kg": round(
+                int(doc.get("stock_grams", 0)) / 1000,
+                2
+            ),
+            "alert_created_at": doc.get(
+                "low_stock_alert_created_at"
+            ),
+        }
+        for doc in docs
+    ]
+
+
+@api.get("/admin/low-stock-alerts/{product_id}/whatsapp")
+async def get_low_stock_whatsapp_message(
+    product_id: str,
+    phone: str,
+    _admin: dict = Depends(get_admin_user)
+):
+    try:
+        product_oid = ObjectId(product_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid product id."
+        ) from exc
+
+    product = await db.products.find_one({
+        "_id": product_oid,
+        "low_stock_alert_active": True,
+    })
+
+    if not product:
+        raise HTTPException(
+            status_code=404,
+            detail="Active low-stock alert not found."
+        )
+
+    # Keep only digits in the WhatsApp number
+    phone = "".join(char for char in phone if char.isdigit())
+
+    if len(phone) < 10 or len(phone) > 15:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide a valid WhatsApp number with country code."
+        )
+
+    stock_kg = round(
+        int(product.get("stock_grams", 0)) / 1000,
+        2
+    )
+
+    message = (
+        f"🌾 SATTHAMMA FARMS – RESTOCK ALERT\n\n"
+        f"Product: {product.get('name', '')}\n"
+        f"Current stock: {stock_kg} kg\n"
+        f"Please arrange restocking for this product.\n\n"
+        f"Thank you."
+    )
+
+    from urllib.parse import quote
+
+    whatsapp_url = (
+        f"https://wa.me/{phone}?text={quote(message)}"
+    )
+
+    return {
+        "product_name": product.get("name", ""),
+        "message": message,
+        "whatsapp_url": whatsapp_url,
+    }
+
+
+
+
 _ALLOWED_STATUSES = {"pending", "confirmed", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"}
 
 _STATUS_COPY = {
@@ -1762,16 +2183,65 @@ _STATUS_COPY = {
 }
 
 @api.put("/admin/orders/{oid}/status")
-async def admin_update_order_status(oid: str, payload: OrderStatusIn, _admin: dict = Depends(get_admin_user)):
+async def admin_update_order_status(
+    oid: str,
+    payload: OrderStatusIn,
+    _admin: dict = Depends(get_admin_user)
+):
     if payload.status not in _ALLOWED_STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {sorted(_ALLOWED_STATUSES)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Allowed: {sorted(_ALLOWED_STATUSES)}"
+        )
+
     try:
         oidv = ObjectId(oid)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Invalid order id") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid order id"
+        ) from exc
+
+    order = await db.orders.find_one({"_id": oidv})
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Do not allow a cancelled order to be reopened.
+    if order.get("status") == "cancelled" and payload.status != "cancelled":
+        raise HTTPException(
+            status_code=409,
+            detail="A cancelled order cannot be reopened. Please create a new order."
+        )
+
+# Do not allow inventory-restored orders to be confirmed again.
+    if (
+        payload.status == "confirmed"
+        and order.get("inventory_restored") is True
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="This order's inventory has already been restored. Create a new order."
+        )
+
     now = datetime.now(timezone.utc).isoformat()
-    upd = {"status": payload.status, f"status_{payload.status}_at": now}
-    await db.orders.update_one({"_id": oidv}, {"$set": upd})
+
+    if payload.status == "confirmed":
+        await deduct_order_inventory(oidv, order)
+
+    if payload.status == "cancelled":
+        if order.get("inventory_deducted") is True:
+            await restore_order_inventory(oidv, order)
+
+    upd = {
+        "status": payload.status,
+        f"status_{payload.status}_at": now
+    }
+
+    await db.orders.update_one(
+        {"_id": oidv},
+        {"$set": upd}
+    )
     # Notify buyer by email when the status has customer-facing copy
     if payload.status in _STATUS_COPY:
         order = await db.orders.find_one({"_id": oidv})
