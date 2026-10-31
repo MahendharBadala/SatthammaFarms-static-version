@@ -109,6 +109,127 @@ export default function Home() {
         </div>
       </section>
 
+
+          {/* GROW & WIN REWARDS SECTION */}
+      <section className="container mx-auto px-4 py-10">
+        <motion.div
+          initial={{ opacity: 0, y: 35 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#092f20] via-[#145c37] to-[#092f20] p-7 md:p-12 shadow-[0_18px_40px_rgba(10,50,30,0.25)]"
+        >
+          {/* Decorative background */}
+          <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#d6a94b]/10 blur-3xl" />
+          <div className="absolute -bottom-20 -left-16 h-64 w-64 rounded-full bg-green-300/10 blur-3xl" />
+
+          <div className="relative z-10 grid items-center gap-8 md:grid-cols-2">
+
+            {/* Text and CTA */}
+            <div className="text-center md:text-left">
+
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#e6c77a]/30 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-[#f4d78c]">
+                <Leaf size={16} weight="fill" />
+                A little happiness from our farm
+              </div>
+
+              <h2 className="font-serif text-4xl font-bold leading-tight text-white sm:text-5xl">
+                Grow Your Luck.
+                <br />
+                <span className="text-[#f3cf72]">
+                  Harvest Rewards!
+                </span>
+              </h2>
+
+              <p className="mx-auto mt-5 max-w-md text-sm leading-7 text-green-100/80 md:mx-0 md:text-base">
+                Every harvest brings happiness. Try our exciting
+                farm-inspired games and discover special rewards
+                for your next Satthamma Farms order.
+              </p>
+
+              <Link
+                to="/rewards"
+                className="group relative mt-8 inline-flex items-center justify-center gap-3 overflow-hidden rounded-full border border-[#ffe6a0] bg-gradient-to-b from-[#ffe9a5] via-[#e9bc58] to-[#c88b2d] px-7 py-4 font-extrabold text-[#49300d] shadow-[0_7px_0_#86571d,0_12px_25px_rgba(0,0,0,0.3)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_10px_0_#86571d,0_17px_30px_rgba(0,0,0,0.35)] active:translate-y-1 active:shadow-[0_3px_0_#86571d]"
+              >
+                <Leaf
+                  size={22}
+                  weight="fill"
+                  className="transition-transform duration-500 group-hover:rotate-[-25deg]"
+                />
+                <span>GROW YOUR LUCK – PLAY & WIN</span>
+                <ArrowRight
+                  size={19}
+                  weight="bold"
+                  className="transition-transform duration-300 group-hover:translate-x-1"
+                />
+              </Link>
+
+              <p className="mt-5 text-xs text-green-100/60">
+                Discover Lucky Spin & Scratch and Win rewards.
+              </p>
+            </div>
+
+            {/* 3D-inspired plant illustration */}
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              className="relative mx-auto flex h-64 w-full max-w-sm items-center justify-center"
+            >
+              <div className="absolute bottom-5 h-20 w-64 rounded-full bg-black/25 blur-2xl" />
+
+              <div className="absolute bottom-8 h-28 w-28 rounded-full border-4 border-[#d9ad52]/50 bg-gradient-to-b from-[#9c6935] via-[#75451f] to-[#3b281b] shadow-[inset_0_8px_15px_rgba(255,255,255,0.15),0_15px_25px_rgba(0,0,0,0.3)]" />
+
+              <div className="absolute bottom-28 h-28 w-2 rounded-full bg-gradient-to-r from-[#477d38] to-[#9bd46d]" />
+
+              <motion.div
+                animate={{ rotate: [0, 8, 0, -8, 0] }}
+                transition={{
+                  duration: 5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="absolute bottom-36"
+              >
+                <Leaf
+                  size={85}
+                  weight="fill"
+                  className="rotate-[-35deg] text-[#a6df79] drop-shadow-[0_8px_8px_rgba(0,0,0,0.3)]"
+                />
+              </motion.div>
+
+              <Leaf
+                size={65}
+                weight="fill"
+                className="absolute bottom-28 left-[24%] rotate-[35deg] text-[#62b85c] drop-shadow-lg"
+              />
+
+              <Leaf
+                size={65}
+                weight="fill"
+                className="absolute bottom-28 right-[24%] -rotate-[35deg] text-[#80cc68] drop-shadow-lg"
+              />
+
+              <div className="absolute right-8 top-8 rounded-full border border-[#f5d17a]/40 bg-[#e7bd5b]/20 p-3 text-3xl shadow-lg backdrop-blur-sm">
+                🪙
+              </div>
+
+              <div className="absolute left-8 top-14 rounded-full border border-white/20 bg-white/10 p-3 text-2xl backdrop-blur-sm">
+                ✨
+              </div>
+
+              <div className="absolute bottom-3 right-14 rounded-full bg-[#f4d27c] px-4 py-2 text-xs font-extrabold text-[#49300d] shadow-lg">
+                WIN REWARDS!
+              </div>
+            </motion.div>
+
+          </div>
+        </motion.div>
+      </section>
+       
       {/* VALUE PROPS */}
       <section className="container mx-auto py-14 grid md:grid-cols-4 gap-4">
         {[
