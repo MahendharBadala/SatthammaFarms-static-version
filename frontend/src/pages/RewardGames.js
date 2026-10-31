@@ -52,6 +52,13 @@ export default function RewardGames() {
   }
 
   function GameResult({ result }) {
+  const expiryDate = result?.expires_at
+    ? new Date(result.expires_at).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
     if (!result) return null;
 
     return (
@@ -84,9 +91,11 @@ export default function RewardGames() {
               Copy Coupon
             </button>
 
-            <p className="mt-2 text-xs text-gray-600">
-              Use this code at checkout. It expires in 7 days.
-            </p>
+           <p className="mt-2 text-xs text-gray-600">
+             {expiryDate
+               ? `Use this code at checkout. Valid until ${expiryDate}.`
+               : "Use this code at checkout."}
+           </p>
           </div>
         )}
       </div>
