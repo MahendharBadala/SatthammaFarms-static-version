@@ -32,3 +32,12 @@ export async function playRewardGame(game) {
 
   return data;
 }
+
+export async function getPreviousGameResult(game) {
+  const { data } = await axios.get(
+    `${API}/games/result/${game}`,
+    { withCredentials: true }
+  );
+
+  return data;
+}
