@@ -1895,6 +1895,26 @@ async def admin_delete_coupon(cid: str, _admin: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=400, detail="Invalid id") from exc
     return {"ok": True}
 
+
+@api.get("/games/settings")
+async def get_public_game_settings():
+    settings = await db.game_settings.find_one(
+        {"_id": "reward_games"}
+    )
+
+    if not settings:
+        settings = DEFAULT_GAME_SETTINGS.copy()
+
+    return {
+        "spin_enabled": settings.get("spin_enabled", True),
+        "scratch_enabled": settings.get("scratch_enabled", True),
+        "rewards": settings.get(
+            "rewards",
+            DEFAULT_GAME_SETTINGS["rewards"]
+        ),
+    }
+
+
 @api.post("/games/play")
 async def play_reward_game(
     payload: GamePlayIn,
