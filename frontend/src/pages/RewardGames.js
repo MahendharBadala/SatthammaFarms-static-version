@@ -425,32 +425,32 @@ export default function RewardGames() {
   // LOAD PREVIOUS GAME RESULTS
   // ------------------------------------------------
 
-  useEffect(() => {
-    async function loadPreviousResults() {
-      const games = ["spin", "scratch"];
+ useEffect(() => {
+  async function loadPreviousResults() {
+    const games = ["spin", "scratch"];
 
-      for (const game of games) {
-        try {
-          const data = await getPreviousGameResult(game);
+    const responses = await Promise.allSettled(
+      games.map((game) => getPreviousGameResult(game))
+    );
 
-          if (data.played && data.result) {
-            setResults((previous) => ({
-              ...previous,
-              [game]: data.result,
-            }));
-          }
-        } catch (error) {
-          console.error(
-            `Could not retrieve previous ${game} result:`,
-            error
-          );
-        }
+    responses.forEach((response, index) => {
+      if (
+        response.status === "fulfilled" &&
+        response.value.played &&
+        response.value.result
+      ) {
+        setResults((previous) => ({
+          ...previous,
+          [games[index]]: response.value.result,
+        }));
       }
-    }
+    });
+  }
 
-    loadPreviousResults();
-  }, []);
+  loadPreviousResults();
+}, []);
 
+  
   // ------------------------------------------------
   // LOAD ADMIN PANEL GAME SETTINGS
   // ------------------------------------------------
