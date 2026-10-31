@@ -1,5 +1,8 @@
-import React, { useState } from "react";
-import { playRewardGame } from "../lib/productApi";
+import React, { useEffect, useState } from "react";
+import {
+  playRewardGame,
+  getPreviousGameResult,
+} from "../lib/productApi";
 
 export default function RewardGames() {
   const [loadingGame, setLoadingGame] = useState("");
@@ -11,6 +14,32 @@ export default function RewardGames() {
     spin: "",
     scratch: "",
   });
+
+  useEffect(() => {
+  async function loadPreviousResults() {
+    const games = ["spin", "scratch"];
+
+    for (const game of games) {
+      try {
+        const data = await getPreviousGameResult(game);
+
+        if (data.played && data.result) {
+          setResults((previous) => ({
+            ...previous,
+            [game]: data.result,
+          }));
+        }
+      } catch (error) {
+        console.error(
+          `Could not retrieve previous ${game} result:`,
+          error
+        );
+      }
+    }
+  }
+
+  loadPreviousResults();
+}, []);
 
   async function handlePlay(game) {
     if (loadingGame) return;
