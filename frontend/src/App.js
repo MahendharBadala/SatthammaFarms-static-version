@@ -19,6 +19,7 @@ import Checkout from "./pages/Checkout";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Admin from "./pages/Admin";
+import RewardGames from "./pages/RewardGames";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -66,6 +67,7 @@ function App() {
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/contact" element={<Contact />} />
+                <Route path="/rewards" element={<RewardGames />} />
                 <Route path="/admin" element={<Admin />} />
               </Routes>
             </Shell>
