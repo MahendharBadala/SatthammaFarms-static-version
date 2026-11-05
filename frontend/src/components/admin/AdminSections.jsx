@@ -408,8 +408,22 @@ export function ProductList({ products, onEdit, onDelete, deletingIds, search = 
               <div className="flex-1">
                 <div className="text-[10px] uppercase tracking-widest text-terracotta">{p.category}</div>
                 <h4 className="font-serif text-xl text-ink">{p.name}</h4>
-                <div className="text-sm text-muted2">₹{p.price} / {p.unit} · stock {p.stock} {p.featured && "· ★ featured"} {p.gallery?.length ? `· ${p.gallery.length} extra photo${p.gallery.length > 1 ? "s" : ""}` : ""}</div>
-              </div>
+               <div className="text-sm text-muted2">
+                 ₹{p.price} / {p.unit}
+                 {" · Shared stock: "}
+                 {p.stock_grams !== undefined && p.stock_grams !== null
+                   ? `${(Number(p.stock_grams) / 1000).toLocaleString("en-IN", {
+                       maximumFractionDigits: 3,
+                     })} kg`
+                   : "Not configured"}
+                 {Array.isArray(p.variants) && p.variants.length > 0
+                   ? ` · ${p.variants.length} weight variant${p.variants.length !== 1 ? "s" : ""}`
+                   : " · No weight variants"}
+                 {p.featured && " · ★ featured"}
+                 {p.gallery?.length
+                   ? ` · ${p.gallery.length} extra photo${p.gallery.length > 1 ? "s" : ""}`
+                   : ""}
+               </div>
               <button data-testid={`admin-edit-${p.id}`} onClick={() => onEdit(p)} className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
               <button
                 data-testid={`admin-delete-${p.id}`}
