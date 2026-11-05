@@ -3,80 +3,388 @@ import { PencilSimple, Trash, Plus } from "@phosphor-icons/react";
 import MediaUploader, { resolveMediaUrl } from "../MediaUploader";
 
 export function ProductForm({ form, setForm, editing, onSave, onCancel }) {
+  const variants = form.variants || [];
+
+  const updateVariant = (index, field, value) => {
+    const updated = [...variants];
+    updated[index] = {
+      ...updated[index],
+      [field]: value,
+    };
+
+    setForm({ ...form, variants: updated });
+  };
+
+  const addVariant = () => {
+    setForm({
+      ...form,
+      variants: [
+        ...variants,
+        {
+          weight_label: "",
+          weight_grams: "",
+          price: "",
+          mrp: "",
+          enabled: true,
+          sort_order: variants.length,
+        },
+      ],
+    });
+  };
+
+  const removeVariant = (index) => {
+    setForm({
+      ...form,
+      variants: variants
+        .filter((_, i) => i !== index)
+        .map((variant, i) => ({
+          ...variant,
+          sort_order: i,
+        })),
+    });
+  };
+
   const textFields = [
-    ["name", "Name", "text"], ["price", "Price (₹)", "number"], ["unit", "Unit (kg, 500g...)", "text"],
-    ["stock", "Stock", "number"],
+    ["name", "Product Name", "text"],
+    ["price", "Base Price (₹)", "number"],
+    ["unit", "Unit", "text"],
   ];
+
   return (
-    <form onSubmit={onSave} className="card-earth p-6 space-y-3" data-testid="product-form">
+    <form
+      onSubmit={onSave}
+      className="card-earth p-6 space-y-5"
+      data-testid="product-form"
+    >
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-2xl text-ink">{editing ? "Edit product" : "Add product"}</h3>
-        <button type="button" data-testid="product-form-close" onClick={onCancel} aria-label="Close form"
-          className="rounded-full border border-edge p-2 hover:bg-cream2 text-muted2">✕</button>
-      </div>
-      {textFields.map(([k, l, t]) => (
-        <div key={k}>
-          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">{l}</label>
-          <input data-testid={`product-form-${k}`} type={t} required value={form[k]}
-            onChange={e => setForm({ ...form, [k]: e.target.value })}
-            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
-        </div>
-      ))}
-      <div>
-        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Category</label>
-        <select data-testid="product-form-category" value={form.category}
-          onChange={e => setForm({ ...form, category: e.target.value })}
-          className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest">
-          {["grains", "pulses", "pickles", "spices", "seeds", "cotton", "other"].map(c => <option key={c}>{c}</option>)}
-        </select>
-      </div>
-      <div>
-        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">Description</label>
-        <textarea data-testid="product-form-description" rows="3" value={form.description}
-          onChange={e => setForm({ ...form, description: e.target.value })}
-          className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest" />
+        <h3 className="font-serif text-2xl text-ink">
+          {editing ? "Edit product" : "Add product"}
+        </h3>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close form"
+          className="rounded-full border border-edge p-2 hover:bg-cream2 text-muted2"
+        >
+          ✕
+        </button>
       </div>
 
+      {/* Basic product information */}
+      {textFields.map(([key, label, type]) => (
+        <div key={key}>
+          <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
+            {label}
+          </label>
+
+          <input
+            type={type}
+            required
+            min={type === "number" ? "0" : undefined}
+            step={type === "number" ? "0.01" : undefined}
+            value={form[key] ?? ""}
+            onChange={(e) =>
+              setForm({ ...form, [key]: e.target.value })
+            }
+            className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest"
+          />
+        </div>
+      ))}
+
+      {/* Shared inventory */}
+      <div className="rounded-xl border border-edge p-4 space-y-2">
+        <h4 className="font-semibold text-ink">
+          Shared Inventory
+        </h4>
+
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
+          Total Available Stock (KG)
+        </label>
+
+        <input
+          data-testid="product-form-stock-kg"
+          type="number"
+          min="0"
+          step="0.001"
+          required
+          value={form.stock_kg ?? ""}
+          onChange={(e) =>
+            setForm({ ...form, stock_kg: e.target.value })
+          }
+          className="w-full px-3 py-2 border border-edge rounded-lg bg-white focus:outline-none focus:border-forest"
+        />
+
+        <p className="text-xs text-muted2">
+          This is the common stock shared by all weight variants.
+          Inventory will be maintained internally in grams.
+        </p>
+
+        <p className="text-sm text-forest font-semibold">
+          Equivalent stock:{" "}
+          {Number(form.stock_kg || 0) * 1000} grams
+        </p>
+      </div>
+
+      {/* Weight variants */}
+      <div className="rounded-xl border border-edge p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h4 className="font-semibold text-ink">
+              Product Weight Variants
+            </h4>
+
+            <p className="text-xs text-muted2 mt-1">
+              Add different package weights and their individual prices.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={addVariant}
+            className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-sm"
+          >
+            <Plus size={16} />
+            Add Weight
+          </button>
+        </div>
+
+        {variants.length === 0 && (
+          <div className="text-sm text-muted2 text-center py-6 border border-dashed border-edge rounded-lg">
+            No weight variants added yet.
+          </div>
+        )}
+
+        {variants.map((variant, index) => (
+          <div
+            key={index}
+            className="border border-edge rounded-lg p-4 space-y-3"
+          >
+            <div className="flex justify-between items-center">
+              <h5 className="font-semibold text-ink">
+                Weight Option {index + 1}
+              </h5>
+
+              <button
+                type="button"
+                onClick={() => removeVariant(index)}
+                className="text-red-600 text-sm hover:underline"
+              >
+                Remove
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted2">
+                  Weight Label
+                </label>
+
+                <input
+                  type="text"
+                  required
+                  placeholder="Example: 500g"
+                  value={variant.weight_label ?? ""}
+                  onChange={(e) =>
+                    updateVariant(index, "weight_label", e.target.value)
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted2">
+                  Weight (Grams)
+                </label>
+
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  step="1"
+                  placeholder="Example: 500"
+                  value={variant.weight_grams ?? ""}
+                  onChange={(e) =>
+                    updateVariant(index, "weight_grams", e.target.value)
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted2">
+                  Selling Price (₹)
+                </label>
+
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={variant.price ?? ""}
+                  onChange={(e) =>
+                    updateVariant(index, "price", e.target.value)
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted2">
+                  MRP (₹)
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={variant.mrp ?? ""}
+                  onChange={(e) =>
+                    updateVariant(index, "mrp", e.target.value)
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted2">
+                  Display Order
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={variant.sort_order ?? index}
+                  onChange={(e) =>
+                    updateVariant(index, "sort_order", e.target.value)
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+                />
+              </div>
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={variant.enabled !== false}
+                onChange={(e) =>
+                  updateVariant(index, "enabled", e.target.checked)
+                }
+              />
+
+              Enable this weight option for customers
+            </label>
+          </div>
+        ))}
+      </div>
+
+      {/* Category */}
+      <div>
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
+          Category
+        </label>
+
+        <select
+          value={form.category}
+          onChange={(e) =>
+            setForm({ ...form, category: e.target.value })
+          }
+          className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+        >
+          {["grains", "pulses", "pickles", "spices", "seeds", "cotton", "other"].map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Description */}
+      <div>
+        <label className="text-xs font-semibold text-muted2 uppercase tracking-widest">
+          Description
+        </label>
+
+        <textarea
+          rows="3"
+          value={form.description ?? ""}
+          onChange={(e) =>
+            setForm({ ...form, description: e.target.value })
+          }
+          className="mt-1 w-full px-3 py-2 border border-edge rounded-lg bg-white"
+        />
+      </div>
+
+      {/* Existing media uploaders */}
       <MediaUploader
         kind="image"
         label="Main product image"
         value={form.image_url}
-        onChange={(url) => setForm({ ...form, image_url: url })}
+        onChange={(url) =>
+          setForm({ ...form, image_url: url })
+        }
         testId="upload-main-image"
         compact
       />
+
       <MediaUploader
         kind="video"
         label="Product video (optional)"
         value={form.video_url}
-        onChange={(url) => setForm({ ...form, video_url: url })}
+        onChange={(url) =>
+          setForm({ ...form, video_url: url })
+        }
         testId="upload-video"
         compact
       />
+
       <MediaUploader
         kind="image"
         label="Gallery — extra photos"
         values={form.gallery || []}
-        onChangeMulti={(urls) => setForm({ ...form, gallery: urls })}
+        onChangeMulti={(urls) =>
+          setForm({ ...form, gallery: urls })
+        }
         testId="upload-gallery"
         compact
       />
 
+      {/* Featured product */}
       <label className="inline-flex items-center gap-2 text-sm pt-2">
-        <input data-testid="product-form-featured" type="checkbox" checked={form.featured}
-          onChange={e => setForm({ ...form, featured: e.target.checked })} /> Featured on home page
+        <input
+          type="checkbox"
+          checked={form.featured}
+          onChange={(e) =>
+            setForm({ ...form, featured: e.target.checked })
+          }
+        />
+        Featured on home page
       </label>
+
+      {/* Actions */}
       <div className="flex gap-2 pt-2">
-        <button data-testid="product-form-save" className="btn-primary flex-1 inline-flex items-center justify-center gap-2">
-          <Plus size={16} /> {editing ? "Update details" : "Add product"}
+        <button
+          type="submit"
+          className="btn-primary flex-1 inline-flex items-center justify-center gap-2"
+        >
+          <Plus size={16} />
+          {editing ? "Update product" : "Add product"}
         </button>
-        <button type="button" data-testid="product-form-cancel" onClick={onCancel} className="btn-outline">
-          {editing ? "Back" : "Cancel"}
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="btn-outline"
+        >
+          Cancel
         </button>
       </div>
     </form>
   );
 }
+
+
 
 export function ProductList({ products, onEdit, onDelete, deletingIds, search = "" }) {
   const query = search.trim().toLowerCase();
