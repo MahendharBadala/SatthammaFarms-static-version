@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { useLanguage } from "../context/LanguageContext";
-import { useCart } from "../context/CartContext";
+import { useCart, getCartItemKey } from "../context/CartContext";
 import { useSite } from "../context/SiteContext";
 import { toast } from "sonner";
 import { WhatsappLogo, Info, CheckCircle } from "@phosphor-icons/react";
@@ -83,7 +83,14 @@ export default function Checkout() {
     setLoading(true);
     try {
       const { data } = await axios.post(`${API}/orders`, {
-        items: items.map((i) => ({ product_id: i.id, quantity: i.quantity })),
+        items: items.map((i) => ({
+          product_id: i.id,
+          quantity: i.quantity,
+          ...(i.variant_weight_grams !== null &&
+            i.variant_weight_grams !== undefined
+            ? { variant_weight_grams: i.variant_weight_grams }
+            : {}),
+        })),
         customer_name: customerName,
         phone,
         pincode,
@@ -223,16 +230,34 @@ export default function Checkout() {
       <div className="card-earth p-6 h-fit">
         <h3 className="font-serif text-2xl text-ink">{t("Summary")}</h3>
         <div className="mt-4 space-y-3">
-          {items.map((i) => (
-            <div key={i.id} className="flex gap-3 text-sm">
-              <img src={resolveMediaUrl(i.image_url)} alt="" className="w-14 h-14 rounded-lg object-cover" />
+        {items.map((i) => {
+          const cartKey = getCartItemKey(i);
+
+          return (
+            <div key={cartKey} className="flex gap-3 text-sm">
+              <img
+                src={resolveMediaUrl(i.image_url)}
+                alt=""
+                className="w-14 h-14 rounded-lg object-cover"
+              />
+
               <div className="flex-1">
-                <div className="text-ink font-serif text-base">{i.name}</div>
-                <div className="text-muted2 text-xs">₹{i.price} × {i.quantity}</div>
+                <div className="text-ink font-serif text-base">
+                  {i.name}
+                </div>
+
+                <div className="text-muted2 text-xs">
+                  {i.weight_label ? `${i.weight_label} · ` : ""}
+                  ₹{i.price} × {i.quantity}
+                </div>
               </div>
-              <div className="font-serif text-forest">₹{i.price * i.quantity}</div>
+
+              <div className="font-serif text-forest">
+                ₹{i.price * i.quantity}
+              </div>
             </div>
-          ))}
+          );
+        })}
         </div>
         <div className="border-t border-edge my-4" />
 
