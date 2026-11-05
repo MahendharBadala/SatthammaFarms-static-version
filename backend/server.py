@@ -7,7 +7,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from bson import ObjectId
 from pydantic import BaseModel, Field, EmailStr, BeforeValidator
 from typing import List, Optional, Annotated, Any
@@ -27,10 +27,346 @@ import jwt as pyjwt
 import uuid
 import requests
 
+# Sales Invoice PDF generation
+from io import BytesIO
+from pymongo import ReturnDocument
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
 # ---------------- Mongo ----------------
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# MongoDB GridFS bucket for Sales Invoice PDFs
+invoice_fs = AsyncIOMotorGridFSBucket(
+    db,
+    bucket_name="invoices"
+)
+
+
+# Generate unique sequential Sales Invoice numbers
+async def generate_invoice_number():
+    year = datetime.now(timezone.utc).year
+
+    counter = await db.counters.find_one_and_update(
+        {"_id": f"sales_invoice_{year}"},
+        {"$inc": {"sequence": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+
+    sequence = counter["sequence"]
+
+    return f"SF-{year}-{sequence:04d}"
+
+# Build a professional SATTHAMMA FARMS Sales Invoice PDF
+def build_sales_invoice_pdf(order: dict, invoice_number: str) -> bytes:
+    from xml.sax.saxutils import escape
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=15 * mm,
+        leftMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="FarmTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=20,
+        textColor=colors.HexColor("#2C4C3B"),
+        spaceAfter=8,
+    ))
+    styles.add(ParagraphStyle(
+        name="SmallText",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=13,
+    ))
+
+    story = []
+
+    story.append(Paragraph("SATTHAMMA FARMS", styles["FarmTitle"]))
+    story.append(Paragraph("SALES INVOICE", styles["Heading2"]))
+    story.append(Spacer(1, 8))
+
+    order_id = str(order.get("_id", ""))
+    order_date = str(order.get("created_at", ""))
+    payment_status = order.get("payment_status")
+
+    if payment_status == "paid" or order.get("status") == "paid":
+        payment_label = "Paid"
+    elif order.get("payment_utr"):
+        payment_label = "Verification Pending"
+    else:
+        payment_label = "Payment Pending"
+
+    invoice_details = [
+        ["Invoice Number:", escape(invoice_number)],
+        ["Order ID:", escape(order_id[-8:].upper())],
+        ["Order Date:", escape(order_date)],
+        ["Payment Status:", payment_label],
+    ]
+
+    details_table = Table(invoice_details, colWidths=[45 * mm, 130 * mm])
+    details_table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#2C4C3B")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+
+    story.append(details_table)
+    story.append(Spacer(1, 14))
+
+    story.append(Paragraph("BILL TO", styles["Heading3"]))
+
+    customer_details = [
+        escape(str(order.get("customer_name") or "Customer")),
+        escape(str(order.get("phone") or "")),
+        escape(str(order.get("address") or "")),
+        escape(str(order.get("pincode") or "")),
+    ]
+
+    for detail in customer_details:
+        if detail:
+            story.append(Paragraph(detail, styles["SmallText"]))
+
+    story.append(Spacer(1, 14))
+
+    table_data = [[
+        "Product",
+        "Weight",
+        "Qty",
+        "Unit Price",
+        "Amount",
+    ]]
+
+    for item in order.get("items", []):
+        table_data.append([
+            Paragraph(
+                escape(str(item.get("name", "Product"))),
+                styles["SmallText"],
+            ),
+            escape(str(item.get("weight_label") or "-")),
+            str(item.get("quantity", 0)),
+            f"Rs. {float(item.get('price', 0)):.2f}",
+            f"Rs. {float(item.get('line_total', 0)):.2f}",
+        ])
+
+    products_table = Table(
+        table_data,
+        colWidths=[65 * mm, 30 * mm, 15 * mm, 35 * mm, 30 * mm],
+        repeatRows=1,
+    )
+
+    products_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2C4C3B")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D8D8D0")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    story.append(products_table)
+    story.append(Spacer(1, 14))
+
+    subtotal = float(order.get("subtotal", 0))
+    discount = float(order.get("discount_amount", 0))
+    total = float(order.get("total", 0))
+
+    totals_data = [
+        ["Subtotal:", f"Rs. {subtotal:.2f}"],
+        ["Discount:", f"- Rs. {discount:.2f}"],
+        ["Grand Total:", f"Rs. {total:.2f}"],
+    ]
+
+    totals_table = Table(
+        totals_data,
+        colWidths=[45 * mm, 45 * mm],
+        hAlign="RIGHT",
+    )
+
+    totals_table.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#2C4C3B")),
+        ("LINEABOVE", (0, -1), (-1, -1), 1, colors.HexColor("#2C4C3B")),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+
+    story.append(totals_table)
+    story.append(Spacer(1, 25))
+
+    story.append(Paragraph(
+        "Thank you for choosing SATTHAMMA FARMS!",
+        styles["Heading3"],
+    ))
+    story.append(Paragraph(
+        "Quality produce, delivered with care.",
+        styles["SmallText"],
+    ))
+
+    doc.build(story)
+
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    return pdf_bytes
+
+
+# Generate and save one Sales Invoice per confirmed order
+async def create_and_store_sales_invoice(order_id: ObjectId):
+    order = await db.orders.find_one({"_id": order_id})
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found.")
+
+    # Prevent duplicate invoice generation
+    if order.get("invoice_file_id"):
+        return {
+            "invoice_number": order.get("invoice_number"),
+            "invoice_file_id": str(order["invoice_file_id"]),
+        }
+
+    now = datetime.now(timezone.utc)
+    stale_before = (
+        now - timedelta(minutes=15)
+    ).isoformat()
+
+    # Claim invoice generation; allow recovery of stale processing
+    claim = await db.orders.update_one(
+        {
+            "_id": order_id,
+            "invoice_file_id": {"$exists": False},
+            "$or": [
+                {"invoice_generating": {"$ne": True}},
+                {"invoice_generating_at": {"$lt": stale_before}},
+            ],
+        },
+        {
+            "$set": {
+                "invoice_generating": True,
+                "invoice_generating_at": now.isoformat(),
+            }
+        },
+    )
+
+    if claim.modified_count != 1:
+        current = await db.orders.find_one({"_id": order_id})
+
+        if current and current.get("invoice_file_id"):
+            return {
+                "invoice_number": current.get("invoice_number"),
+                "invoice_file_id": str(current["invoice_file_id"]),
+            }
+
+        raise HTTPException(
+            status_code=409,
+            detail="Invoice generation is already in progress. Please retry shortly.",
+        )
+
+    uploaded_file_id = None
+
+    try:
+        order = await db.orders.find_one({"_id": order_id})
+
+        # Reuse the invoice number if a previous attempt already allocated it
+        invoice_number = order.get("invoice_number")
+
+        if not invoice_number:
+            invoice_number = await generate_invoice_number()
+
+            await db.orders.update_one(
+                {
+                    "_id": order_id,
+                    "invoice_generating": True,
+                    "invoice_number": {"$exists": False},
+                },
+                {
+                    "$set": {
+                        "invoice_number": invoice_number,
+                    }
+                },
+            )
+
+            order = await db.orders.find_one({"_id": order_id})
+            invoice_number = order["invoice_number"]
+
+        pdf_bytes = build_sales_invoice_pdf(order, invoice_number)
+
+        filename = f"{invoice_number}.pdf"
+
+        uploaded_file_id = await invoice_fs.upload_from_stream(
+            filename,
+            pdf_bytes,
+            metadata={
+                "order_id": str(order_id),
+                "invoice_number": invoice_number,
+                "document_type": "sales_invoice",
+            },
+        )
+
+        await db.orders.update_one(
+            {
+                "_id": order_id,
+                "invoice_generating": True,
+            },
+            {
+                "$set": {
+                    "invoice_file_id": uploaded_file_id,
+                    "invoice_generated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                "$unset": {
+                    "invoice_generating": "",
+                    "invoice_generating_at": "",
+                },
+            },
+        )
+
+        return {
+            "invoice_number": invoice_number,
+            "invoice_file_id": str(uploaded_file_id),
+        }
+
+    except Exception:
+        await db.orders.update_one(
+            {"_id": order_id, "invoice_generating": True},
+            {
+                "$unset": {
+                    "invoice_generating": "",
+                    "invoice_generating_at": "",
+                }
+            },
+        )
+        raise
+
+
 
 # ---------------- Auth helpers ----------------
 JWT_ALGORITHM = "HS256"
@@ -1748,6 +2084,67 @@ async def create_order(payload: OrderIn, request: Request):
         "status": "pending",
     }
 
+
+# Download a Sales Invoice (admin only)
+@api.get("/admin/orders/{oid}/invoice")
+async def download_sales_invoice(
+    oid: str,
+    _admin: dict = Depends(get_admin_user)
+):
+    try:
+        order_oid = ObjectId(oid)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid order id."
+        ) from exc
+
+    order = await db.orders.find_one({"_id": order_oid})
+
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found."
+        )
+
+    invoice_file_id = order.get("invoice_file_id")
+
+    if not invoice_file_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Sales Invoice has not been generated yet."
+        )
+
+    try:
+        grid_out = await invoice_fs.open_download_stream(
+            ObjectId(str(invoice_file_id))
+        )
+        pdf_bytes = await grid_out.read()
+
+    except Exception as exc:
+        logging.getLogger(__name__).exception(
+            "Sales Invoice download failed."
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve the Sales Invoice."
+        ) from exc
+
+    invoice_number = order.get("invoice_number", "sales-invoice")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{invoice_number}.pdf"'
+            )
+        },
+    )
+
+
+
+
 @api.get("/admin/orders")
 async def all_orders(_admin: dict = Depends(get_admin_user)):
     docs = await db.orders.find({}).sort("created_at", -1).to_list(1000)
@@ -1809,6 +2206,11 @@ async def confirm_payment(oid: str, payload: OrderConfirmIn, user: dict = Depend
         "payment_utr": (payload.utr or "").strip(),
         "payment_claimed_at": now,
     }})
+
+    # Automatically generate the Sales Invoice when an order is confirmed
+    if payload.status == "confirmed":
+        await create_and_store_sales_invoice(oidv)
+        
     return {"ok": True, "status": "payment_pending_verification"}
 
 
