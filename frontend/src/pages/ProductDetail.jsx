@@ -64,7 +64,8 @@ const [reviewText, setReviewText] = useState("");
 const [reviewPhotos, setReviewPhotos] = useState([]);
 const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
-  const { add } = useCart();
+const { add } = useCart();
+const [selectedVariant, setSelectedVariant] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +94,21 @@ const [reviewSubmitting, setReviewSubmitting] = useState(false);
     };
   }, [id]);
 
+  // Load enabled weight variants and select the first one by display order.
+  useEffect(() => {
+    if (!product) {
+      setSelectedVariant(null);
+      return;
+    }
+
+    const enabledVariants = (Array.isArray(product.variants) ? product.variants : [])
+      .filter((variant) => variant.enabled === true)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+
+    setSelectedVariant(enabledVariants[0] || null);
+  }, [product]);
+
+  
   useEffect(() => {
   let cancelled = false;
 
@@ -604,15 +620,64 @@ const reviewDistribution = {
             {product.name}
           </h1>
 
-          <div className="mt-4 flex items-baseline gap-2">
+          {/* WEIGHT VARIANT SELECTOR */}
+          {product.variants?.some((variant) => variant.enabled === true) && (
+            <div className="mt-5">
+              <h3 className="text-sm font-semibold text-ink mb-3">
+                Select Weight
+              </h3>
+
+              <div className="flex flex-wrap gap-2">
+                {product.variants
+                  .filter((variant) => variant.enabled === true)
+                  .sort(
+                    (a, b) =>
+                      Number(a.sort_order || 0) -
+                      Number(b.sort_order || 0)
+                  )
+                  .map((variant) => (
+                    <button
+                      key={variant.weight_grams}
+                      type="button"
+                      onClick={() => setSelectedVariant(variant)}
+                      className={`min-w-[85px] rounded-xl border px-4 py-3 text-center transition ${
+                        selectedVariant?.weight_grams === variant.weight_grams
+                          ? "border-forest bg-forest/5 text-forest ring-1 ring-forest"
+                          : "border-edge bg-white text-ink hover:border-forest"
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">
+                        {variant.weight_label}
+                      </span>
+
+                      <span className="block text-xs mt-1">
+                        ₹{variant.price}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* SELECTED PRODUCT PRICE */}
+          <div className="mt-4 flex items-baseline gap-3">
             <span className="font-serif text-3xl sm:text-4xl text-forest font-semibold">
-              ₹{product.price}
+              ₹{selectedVariant?.price ?? product.price}
             </span>
 
+            {selectedVariant?.mrp !== null &&
+              selectedVariant?.mrp !== undefined &&
+              selectedVariant.mrp > selectedVariant.price && (
+                <span className="text-muted2 text-base line-through">
+                  ₹{selectedVariant.mrp}
+                </span>
+              )}
+
             <span className="text-muted2 text-sm">
-              / {product.unit}
+              / {selectedVariant?.weight_label || product.unit}
             </span>
           </div>
+          
 
           <p className="mt-5 text-muted2 leading-relaxed">
             {product.description}
@@ -672,14 +737,17 @@ const reviewDistribution = {
             <button
               data-testid="detail-add-to-cart"
               onClick={() => {
-                add(product, qty);
+                add(product, qty, selectedVariant);
+
                 toast.success(
-                  `Added ${qty} × ${product.name}`
+                  `Added ${qty} × ${product.name}${
+                    selectedVariant ? ` (${selectedVariant.weight_label})` : ""
+                  }`
                 );
               }}
               className="btn-primary flex-1"
             >
-              {t("addToCart")} · ₹{product.price * qty}
+              {t("addToCart")} · ₹{(selectedVariant?.price ?? product.price) * qty}
             </button>
           </div>
 
