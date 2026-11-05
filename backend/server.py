@@ -2471,14 +2471,18 @@ async def restore_order_inventory(order_id: ObjectId, order: dict):
 LOW_STOCK_THRESHOLD_GRAMS = 10000
 
 
-async def update_low_stock_alert_state(product_id: ObjectId):
+async def update_low_stock_alert_state(
+    product_id: ObjectId,
+    session=None,
+):
     product = await db.products.find_one(
         {"_id": product_id},
         {
             "stock_grams": 1,
             "low_stock_alert_active": 1,
             "name": 1,
-        }
+        },
+        session=session,
     )
 
     if not product or product.get("stock_grams") is None:
@@ -2497,9 +2501,12 @@ async def update_low_stock_alert_state(product_id: ObjectId):
             {
                 "$set": {
                     "low_stock_alert_active": True,
-                    "low_stock_alert_created_at": datetime.now(timezone.utc).isoformat(),
+                    "low_stock_alert_created_at": datetime.now(
+                        timezone.utc
+                    ).isoformat(),
                 }
             },
+            session=session,
         )
 
     # Reset alert when stock is replenished to 10kg or more.
@@ -2510,8 +2517,9 @@ async def update_low_stock_alert_state(product_id: ObjectId):
                 "$set": {"low_stock_alert_active": False},
                 "$unset": {"low_stock_alert_created_at": ""},
             },
+            session=session,
         )
-
+        
 
 # Admin-only: retrieve products requiring restocking
 @api.get("/admin/low-stock-alerts")
