@@ -26,7 +26,21 @@ import {
 } from "../lib/adminReviewApi";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const empty = { name: "", category: "grains", price: 0, unit: "kg", description: "", image_url: "", video_url: "", gallery: [], stock: 100, featured: false };
+const empty = {
+  name: "",
+  category: "grains",
+  price: 0,
+  unit: "kg",
+  description: "",
+  image_url: "",
+  video_url: "",
+  gallery: [],
+  stock: 100,
+  stock_kg: 100,
+  stock_grams: 100000,
+  variants: [],
+  featured: false,
+};
 
 export default function Admin() {
   const { user, loading, logout } = useAuth();
@@ -138,13 +152,65 @@ export default function Admin() {
   if (!user) return <Navigate to="/" replace />;
   if (user.role !== "admin") return <Navigate to="/" replace />;
 
-  const startEdit = (p) => { setEditing(p.id); setForm({ ...empty, ...p }); setShowProductForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const startEdit = (p) => {
+    setEditing(p.id);
+
+    setForm({
+      ...empty,
+      ...p,
+      stock_kg:
+        p.stock_grams !== undefined && p.stock_grams !== null
+          ? Number(p.stock_grams) / 1000
+          : Number(p.stock ?? 0),
+
+      stock_grams:
+        p.stock_grams !== undefined && p.stock_grams !== null
+          ? Number(p.stock_grams)
+          : null,
+
+      variants: Array.isArray(p.variants) ? p.variants : [],
+    });
+
+    setShowProductForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const cancel = () => { setEditing(null); setForm(empty); setShowProductForm(false); };
   const openAdd = () => { setEditing(null); setForm(empty); setShowProductForm(true); };
 
   const save = async (e) => {
     e.preventDefault();
-    const payload = { ...form, price: Number(form.price), stock: Number(form.stock) };
+
+    const stockKg = Number(form.stock_kg);
+
+    if (!Number.isFinite(stockKg) || stockKg < 0) {
+      toast.error("Please enter a valid stock quantity in KG.");
+      return;
+    }
+
+    const variants = (form.variants || []).map((variant) => ({
+      ...variant,
+      weight_label: String(variant.weight_label || "").trim(),
+      weight_grams: Number(variant.weight_grams),
+      price: Number(variant.price),
+      mrp:
+        variant.mrp === "" || variant.mrp === null
+          ? null
+          : Number(variant.mrp),
+      enabled: Boolean(variant.enabled),
+      sort_order: Number(variant.sort_order || 0),
+    }));
+
+    const payload = {
+      ...form,
+      price: Number(form.price),
+      stock: stockKg,
+      stock_kg: stockKg,
+      stock_grams: Math.round(stockKg * 1000),
+      variants,
+    };
+
+    delete payload.id;
+
     try {
       if (editing) {
         await axios.put(`${API}/products/${editing}`, payload);
@@ -153,8 +219,12 @@ export default function Admin() {
         await axios.post(`${API}/products`, payload);
         toast.success("Product added");
       }
-      cancel(); load();
-    } catch (err) { toast.error(err?.response?.data?.detail || "Failed to save"); }
+
+      cancel();
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to save");
+    }
   };
 
   const del = async (id) => {
