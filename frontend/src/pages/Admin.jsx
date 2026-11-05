@@ -177,32 +177,36 @@ export default function Admin() {
   const cancel = () => { setEditing(null); setForm(empty); setShowProductForm(false); };
   const openAdd = () => { setEditing(null); setForm(empty); setShowProductForm(true); };
 
+
+  
   const save = async (e) => {
     e.preventDefault();
 
     const stockKg = Number(form.stock_kg);
+    const basePrice = Number(form.price);
 
-    if (!Number.isFinite(stockKg) || stockKg < 0) {
+    if (!Number.isFinite(stockKg) || stockKg < 0 || !Number.isSafeInteger(Math.round(stockKg * 1000))) {
       toast.error("Please enter a valid stock quantity in KG.");
       return;
     }
 
-    const seenWeights = new Set();
+    if (!Number.isFinite(basePrice) || basePrice < 0) {
+      toast.error("Please enter a valid product base price.");
+      return;
+    }
 
+    const seenWeights = new Set();
     const variants = [];
 
     for (let index = 0; index < (form.variants || []).length; index++) {
       const variant = form.variants[index];
-
       const weightLabel = String(variant.weight_label || "").trim();
       const weightGrams = Number(variant.weight_grams);
       const price = Number(variant.price);
-
       const mrp =
         variant.mrp === "" || variant.mrp === null
           ? null
           : Number(variant.mrp);
-
       const sortOrder = Number(variant.sort_order ?? index);
 
       if (!weightLabel) {
@@ -210,7 +214,7 @@ export default function Admin() {
         return;
       }
 
-      if (!Number.isInteger(weightGrams) || weightGrams <= 0) {
+      if (!Number.isSafeInteger(weightGrams) || weightGrams <= 0) {
         toast.error(`Enter a valid weight in grams for ${weightLabel}.`);
         return;
       }
@@ -230,7 +234,7 @@ export default function Admin() {
         return;
       }
 
-      if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+      if (!Number.isSafeInteger(sortOrder) || sortOrder < 0) {
         toast.error(`Invalid display order for ${weightLabel}.`);
         return;
       }
@@ -250,7 +254,7 @@ export default function Admin() {
 
     const payload = {
       ...form,
-      price: Number(form.price),
+      price: basePrice,
       stock: Math.floor(stockKg),
       stock_kg: stockKg,
       stock_grams: Math.round(stockKg * 1000),
