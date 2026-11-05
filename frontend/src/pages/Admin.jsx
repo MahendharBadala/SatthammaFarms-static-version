@@ -187,18 +187,66 @@ export default function Admin() {
       return;
     }
 
-    const variants = (form.variants || []).map((variant) => ({
-      ...variant,
-      weight_label: String(variant.weight_label || "").trim(),
-      weight_grams: Number(variant.weight_grams),
-      price: Number(variant.price),
-      mrp:
+    const seenWeights = new Set();
+
+    const variants = [];
+
+    for (let index = 0; index < (form.variants || []).length; index++) {
+      const variant = form.variants[index];
+
+      const weightLabel = String(variant.weight_label || "").trim();
+      const weightGrams = Number(variant.weight_grams);
+      const price = Number(variant.price);
+
+      const mrp =
         variant.mrp === "" || variant.mrp === null
           ? null
-          : Number(variant.mrp),
-      enabled: Boolean(variant.enabled),
-      sort_order: Number(variant.sort_order || 0),
-    }));
+          : Number(variant.mrp);
+
+      const sortOrder = Number(variant.sort_order ?? index);
+
+      if (!weightLabel) {
+        toast.error(`Weight label is required for variant ${index + 1}.`);
+        return;
+      }
+
+      if (!Number.isInteger(weightGrams) || weightGrams <= 0) {
+        toast.error(`Enter a valid weight in grams for ${weightLabel}.`);
+        return;
+      }
+
+      if (seenWeights.has(weightGrams)) {
+        toast.error(`Duplicate weight found: ${weightLabel}.`);
+        return;
+      }
+
+      if (!Number.isFinite(price) || price < 0) {
+        toast.error(`Invalid selling price for ${weightLabel}.`);
+        return;
+      }
+
+      if (mrp !== null && (!Number.isFinite(mrp) || mrp < price)) {
+        toast.error(`MRP must be greater than or equal to selling price for ${weightLabel}.`);
+        return;
+      }
+
+      if (!Number.isInteger(sortOrder) || sortOrder < 0) {
+        toast.error(`Invalid display order for ${weightLabel}.`);
+        return;
+      }
+
+      seenWeights.add(weightGrams);
+
+      variants.push({
+        ...variant,
+        weight_label: weightLabel,
+        weight_grams: weightGrams,
+        price,
+        mrp,
+        enabled: Boolean(variant.enabled),
+        sort_order: sortOrder,
+      });
+    }
 
     const payload = {
       ...form,
