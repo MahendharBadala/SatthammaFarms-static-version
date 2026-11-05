@@ -203,7 +203,7 @@ export default function Admin() {
     const payload = {
       ...form,
       price: Number(form.price),
-      stock: stockKg,
+      stock: Math.floor(stockKg),
       stock_kg: stockKg,
       stock_grams: Math.round(stockKg * 1000),
       variants,
