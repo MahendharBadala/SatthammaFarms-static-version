@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 import hashlib
 import secrets
 import random
-
+import math
 import os
 import logging
 import cloudinary
@@ -1183,6 +1183,7 @@ async def debug_order_items(_admin: dict = Depends(get_admin_user)):
         for doc in docs
     ]
 
+
 def validate_product_inventory(payload: ProductIn):
     # Shared stock cannot be negative
     if payload.stock_grams is not None and payload.stock_grams < 0:
@@ -1193,39 +1194,51 @@ def validate_product_inventory(payload: ProductIn):
 
     seen_weights = set()
 
-    for variant in payload.variants:
+    for index, variant in enumerate(payload.variants):
+        # Validate weight label
         if not variant.weight_label.strip():
             raise HTTPException(
                 status_code=400,
-                detail="Variant weight label is required."
+                detail=f"Variant weight label is required for variant {index + 1}."
             )
 
+        # Validate weight
         if variant.weight_grams <= 0:
             raise HTTPException(
                 status_code=400,
-                detail="Variant weight must be greater than zero."
+                detail=f"Variant weight must be greater than zero for {variant.weight_label}."
             )
 
-        if variant.price < 0:
+        # Validate selling price
+        if not math.isfinite(variant.price) or variant.price < 0:
             raise HTTPException(
                 status_code=400,
-                detail="Variant price cannot be negative."
+                detail=f"Invalid selling price for {variant.weight_label}."
             )
 
-        if variant.mrp is not None and variant.mrp < variant.price:
+        # Validate MRP
+        if variant.mrp is not None:
+            if not math.isfinite(variant.mrp) or variant.mrp < variant.price:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"MRP must be valid and greater than or equal to selling price for {variant.weight_label}."
+                )
+
+        # Validate display order
+        if variant.sort_order < 0:
             raise HTTPException(
                 status_code=400,
-                detail="Variant MRP cannot be less than its selling price."
+                detail=f"Display order cannot be negative for {variant.weight_label}."
             )
 
+        # Validate duplicate weights
         if variant.weight_grams in seen_weights:
             raise HTTPException(
                 status_code=400,
-                detail="Duplicate variant weights are not allowed."
+                detail=f"Duplicate variant weight: {variant.weight_label}."
             )
 
         seen_weights.add(variant.weight_grams)
-
 
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
