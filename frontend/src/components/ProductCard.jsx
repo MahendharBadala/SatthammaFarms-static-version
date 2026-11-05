@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -16,6 +16,16 @@ export default function ProductCard({ product, priority = false }) {
   const navigate = useNavigate();
   const { add } = useCart();
   const { t } = useLanguage();
+
+    // Select the first enabled variant according to admin display order.
+  const defaultVariant = useMemo(() => {
+    return (Array.isArray(product.variants) ? product.variants : [])
+      .filter((variant) => variant.enabled === true)
+      .sort(
+        (a, b) =>
+          Number(a.sort_order || 0) - Number(b.sort_order || 0)
+      )[0] || null;
+  }, [product.variants]);
 
   const [touchPreview, setTouchPreview] = useState(false);
   const longPressTimer = useRef(null);
@@ -59,8 +69,14 @@ export default function ProductCard({ product, priority = false }) {
 
   const addToCart = (e) => {
     e.stopPropagation();
-    add(product);
-    toast.success(`Added ${product.name} to cart`);
+
+    add(product, 1, defaultVariant);
+
+    toast.success(
+      `Added ${product.name} to cart${
+        defaultVariant ? ` (${defaultVariant.weight_label})` : ""
+      }`
+    );
   };
 
   return (
@@ -215,11 +231,19 @@ export default function ProductCard({ product, priority = false }) {
         <div className="mt-4 flex items-end justify-between gap-2">
           <div>
             <div className="font-serif text-lg sm:text-2xl text-forest font-semibold">
-              ₹{product.price}
+              ₹{defaultVariant?.price ?? product.price}
             </div>
 
+            {defaultVariant?.mrp !== null &&
+              defaultVariant?.mrp !== undefined &&
+              defaultVariant.mrp > defaultVariant.price && (
+                <div className="text-xs text-muted2 line-through">
+                  ₹{defaultVariant.mrp}
+                </div>
+              )}
+
             <div className="text-[10px] sm:text-[11px] text-muted2 -mt-1">
-              per {product.unit}
+              per {defaultVariant?.weight_label || product.unit}
             </div>
           </div>
 
