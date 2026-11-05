@@ -339,7 +339,7 @@ async def create_and_store_sales_invoice(order_id: ObjectId):
             },
             {
                 "$set": {
-                    "invoice_file_id": uploaded_file_id,
+                    "invoice_file_id": str(uploaded_file_id),
                     "invoice_generated_at": datetime.now(timezone.utc).isoformat(),
                 },
                 "$unset": {
