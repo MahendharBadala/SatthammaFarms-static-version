@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { useCart } from "../context/CartContext";
+import { useCart, getCartItemKey } from "../context/CartContext";
 import { Trash, Plus, Minus, ShoppingBagOpen } from "@phosphor-icons/react";
 import { resolveMediaUrl } from "../components/MediaUploader";
 import { useLanguage } from "../context/LanguageContext";
@@ -26,26 +26,76 @@ export default function Cart() {
       <p className="text-muted2 mt-1">{t("reviewHarvest")}</p>
       <div className="grid lg:grid-cols-3 gap-8 mt-8">
         <div className="lg:col-span-2 space-y-4">
-          {items.map(item => (
-            <div key={item.id} className="card-earth p-4 flex gap-4" data-testid={`cart-item-${item.id}`}>
-              <img src={resolveMediaUrl(item.image_url)} alt={item.name} className="w-24 h-24 object-cover rounded-xl" />
-              <div className="flex-1 flex flex-col">
-                <div className="flex justify-between">
-                  <h3 className="font-serif text-xl text-ink">{item.name}</h3>
-                  <button data-testid={`cart-remove-${item.id}`} onClick={() => remove(item.id)} className="text-muted2 hover:text-terracotta"><Trash size={18} /></button>
-                </div>
-                <div className="text-xs text-muted2">₹{item.price} per {item.unit}</div>
-                <div className="mt-auto flex items-center justify-between">
-                  <div className="flex items-center border border-edge rounded-full bg-white">
-                    <button onClick={() => update(item.id, item.quantity - 1)} className="p-2 hover:bg-cream2 rounded-l-full"><Minus size={14} /></button>
-                    <span className="px-4 text-sm font-semibold" data-testid={`cart-qty-${item.id}`}>{item.quantity}</span>
-                    <button onClick={() => update(item.id, item.quantity + 1)} className="p-2 hover:bg-cream2 rounded-r-full"><Plus size={14} /></button>
+          
+          {items.map((item) => {
+            const cartKey = getCartItemKey(item);
+
+            return (
+              <div
+                key={cartKey}
+                className="card-earth p-4 flex gap-4"
+                data-testid={`cart-item-${cartKey}`}
+              >
+                <img
+                  src={resolveMediaUrl(item.image_url)}
+                  alt={item.name}
+                  className="w-24 h-24 object-cover rounded-xl"
+                />
+
+                <div className="flex-1 flex flex-col">
+                  <div className="flex justify-between">
+                    <h3 className="font-serif text-xl text-ink">
+                      {item.name}
+                    </h3>
+
+                    <button
+                      data-testid={`cart-remove-${cartKey}`}
+                      onClick={() => remove(cartKey)}
+                      className="text-muted2 hover:text-terracotta"
+                    >
+                      <Trash size={18} />
+                    </button>
                   </div>
-                  <div className="font-serif text-xl text-forest font-semibold">₹{item.price * item.quantity}</div>
+
+                  <div className="text-xs text-muted2">
+                    {item.weight_label
+                      ? `Weight: ${item.weight_label} · `
+                      : ""}
+                    ₹{item.price} per {item.weight_label || item.unit}
+                  </div>
+
+                  <div className="mt-auto flex items-center justify-between">
+                    <div className="flex items-center border border-edge rounded-full bg-white">
+                      <button
+                        onClick={() => update(cartKey, item.quantity - 1)}
+                        className="p-2 hover:bg-cream2 rounded-l-full"
+                      >
+                        <Minus size={14} />
+                      </button>
+
+                      <span
+                        className="px-4 text-sm font-semibold"
+                        data-testid={`cart-qty-${cartKey}`}
+                      >
+                        {item.quantity}
+                      </span>
+
+                      <button
+                        onClick={() => update(cartKey, item.quantity + 1)}
+                        className="p-2 hover:bg-cream2 rounded-r-full"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+
+                    <div className="font-serif text-xl text-forest font-semibold">
+                      ₹{item.price * item.quantity}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <button onClick={clear} className="text-sm text-muted2 hover:text-terracotta">{t("clearCart")}</button>
         </div>
         <div className="card-earth p-6 h-fit sticky top-24">
