@@ -2034,10 +2034,33 @@ async def create_order(payload: OrderIn, request: Request):
                     detail=f"Please select a weight option for {p['name']}."
                 )
 
-        # Backward compatibility for products without variants
+            # Backward compatibility for products without variants
             unit_price = float(p["price"])
-            weight_grams = None
-            weight_label = p.get("unit", "kg")
+            weight_label = str(p.get("unit", "kg")).strip()
+
+            # Convert the product's base weight unit into grams.
+            unit_to_grams = {
+                "kg": 1000,
+                "kilogram": 1000,
+                "kilograms": 1000,
+                "g": 1,
+                "gram": 1,
+                "grams": 1,
+            }
+
+            normalized_unit = weight_label.lower()
+
+            if normalized_unit not in unit_to_grams:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Inventory weight conversion is not configured "
+                        f"for {p['name']} ({weight_label})."
+                    )
+                )
+
+            weight_grams = unit_to_grams[normalized_unit]
+            
 
         line = unit_price * quantity
         total += line
