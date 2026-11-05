@@ -422,9 +422,16 @@ export function ProductList({ products, onEdit, onDelete, deletingIds, search = 
                  {p.featured && " · ★ featured"}
                  {p.gallery?.length
                    ? ` · ${p.gallery.length} extra photo${p.gallery.length > 1 ? "s" : ""}`
-                   : ""}
-               </div>
-              <button data-testid={`admin-edit-${p.id}`} onClick={() => onEdit(p)} className="rounded-full border border-edge p-2 hover:bg-cream2"><PencilSimple size={16} /></button>
+                  : ""}
+                </div>
+              </div>
+              <button
+                data-testid={`admin-edit-${p.id}`}
+                onClick={() => onEdit(p)}
+                className="rounded-full border border-edge p-2 hover:bg-cream2"
+              >
+                <PencilSimple size={16} />
+              </button>
               <button
                 data-testid={`admin-delete-${p.id}`}
                 onClick={() => onDelete(p.id)}
