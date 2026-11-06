@@ -76,27 +76,28 @@ export default function Admin() {
     return next;
   });
 
-  const load = useCallback(async () => {
+ const load = useCallback(async () => {
   const [p, o, s, c, b, si, r, lowStock] = await Promise.all([
-  axios.get(`${API}/admin/products`),
-  axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
-  axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
-  axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
-  axios.get(`${API}/admin/banners`).catch(() => ({ data: [] })),
-  axios.get(`${API}/admin/low-stock-alerts`).catch(() => ({ data: [] })),
-  axios.get(`${API}/site`).catch(() => ({ data: null })),
-  fetchAdminReviews().catch(() => []),
+    axios.get(`${API}/admin/products`),
+    axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
+    axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
+    axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
+    axios.get(`${API}/admin/banners`).catch(() => ({ data: [] })),
+    axios.get(`${API}/site`).catch(() => ({ data: null })),
+    fetchAdminReviews().catch(() => []),
+    axios.get(`${API}/admin/low-stock-alerts`).catch(() => ({ data: [] })),
   ]);
-   setProducts(p.data);
-   setOrders(o.data);
-   setSettings(s.data);
-   setCoupons(c.data);
-   setBanners(b.data);
-   setSiteSettings(si.data);
-   setReviews(r);
-   setLowStockAlerts(lowStock.data || []);
-  }, []);
 
+  setProducts(p.data);
+  setOrders(o.data);
+  setSettings(s.data);
+  setCoupons(c.data);
+  setBanners(b.data);
+  setSiteSettings(si.data);
+  setReviews(r);
+  setLowStockAlerts(lowStock.data || []);
+
+}, []);
   const handleApproveReview = async (reviewId) => {
   try {
     await approveReview(reviewId);
