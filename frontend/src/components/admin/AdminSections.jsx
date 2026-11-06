@@ -1,4 +1,5 @@
 import React from "react";
+import axios from "axios";
 import { PencilSimple, Trash, Plus } from "@phosphor-icons/react";
 import MediaUploader, { resolveMediaUrl } from "../MediaUploader";
 
@@ -1196,6 +1197,118 @@ export function ReviewsManager({
         ))}
 
       </div>
+    </div>
+  );
+}
+
+
+// ---------------- Low Stock Alerts ----------------
+
+export function LowStockAlerts({ alerts = [], onRefresh, whatsappNumber }) {
+  const [loadingId, setLoadingId] = React.useState(null);
+
+  const openWhatsApp = async (productId) => {
+    const phone = String(whatsappNumber || "").replace(/\D/g, "");
+
+    if (!phone) {
+      alert("Please add your WhatsApp number in Admin → Site content.");
+      return;
+    }
+
+    try {
+      setLoadingId(productId);
+
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}/api/admin/low-stock-alerts/${productId}/whatsapp`,
+        { params: { phone } }
+      );
+
+      const whatsappUrl = response.data?.whatsapp_url;
+
+      if (!whatsappUrl) {
+        throw new Error("WhatsApp link was not returned.");
+      }
+
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      alert(
+        error?.response?.data?.detail ||
+        error.message ||
+        "Unable to create WhatsApp message."
+      );
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="font-serif text-2xl text-ink">Low Stock Alerts</h2>
+          <p className="text-sm text-muted2 mt-1">
+            Products with stock below 10 kg.
+          </p>
+        </div>
+
+        <button onClick={onRefresh} className="btn-outline">
+          Refresh alerts
+        </button>
+      </div>
+
+      {alerts.length === 0 ? (
+        <div className="card-earth p-8 text-center">
+          <p className="text-forest font-semibold">
+            All products have sufficient stock.
+          </p>
+          <p className="text-sm text-muted2 mt-2">
+            Products below 10 kg will appear here automatically.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {alerts.map((item) => (
+            <div
+              key={item.product_id}
+              className="card-earth p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+            >
+              <div>
+                <h3 className="font-semibold text-ink text-lg">
+                  {item.name}
+                </h3>
+
+                <p className="text-sm text-muted2">
+                  Category: {item.category || "Uncategorized"}
+                </p>
+
+                <p className="text-sm mt-2">
+                  Current stock:{" "}
+                  <span className="font-bold text-red-600">
+                    {Number(item.stock_kg).toFixed(2)} kg
+                  </span>
+                </p>
+
+                <p className="text-xs text-muted2 mt-1">
+                  Alert created:{" "}
+                  {item.alert_created_at
+                    ? new Date(item.alert_created_at).toLocaleString()
+                    : "Recently"}
+                </p>
+              </div>
+
+              <button
+                onClick={() => openWhatsApp(item.product_id)}
+                disabled={loadingId === item.product_id}
+                className="btn-primary whitespace-nowrap"
+              >
+                {loadingId === item.product_id
+                  ? "Preparing..."
+                  : "Send WhatsApp Restock Message"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
