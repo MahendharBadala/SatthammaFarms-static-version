@@ -2227,27 +2227,33 @@ async def update_payment_settings(payload: PaymentSettingsIn, _admin: dict = Dep
 # --- Order confirmation + status flow ---
 @api.post("/orders/{oid}/confirm-payment")
 async def confirm_payment(oid: str, payload: OrderConfirmIn, user: dict = Depends(get_current_user)):
+    """Record a customer's payment claim without changing the order workflow.
+
+    WhatsApp orders remain in their existing order status. Payment verification
+    is tracked separately so online payment can be enabled in the future.
+    """
     try:
-        order = await db.orders.find_one({"_id": ObjectId(oid)})
+        oidv = ObjectId(oid)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid order id") from exc
+
+    order = await db.orders.find_one({"_id": oidv})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order["user_id"] != user["id"] and user.get("role") != "admin":
+    if order.get("user_id") != user.get("id") and user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Not your order")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.orders.update_one({"_id": order["_id"]}, {"$set": {
-        "status": "payment_pending_verification",
-        "payment_method": payload.method or "upi",
-        "payment_utr": (payload.utr or "").strip(),
-        "payment_claimed_at": now,
-    }})
+    if order.get("status") == "cancelled":
+        raise HTTPException(status_code=409, detail="Payment cannot be recorded for a cancelled order")
 
-    # Automatically generate the Sales Invoice when an order is confirmed
-    if payload.status == "confirmed":
-        await create_and_store_sales_invoice(oidv)
-        
-    return {"ok": True, "status": "payment_pending_verification"}
+    now = datetime.now(timezone.utc).isoformat()
+    update = {
+        "payment_method": (payload.method or "upi").strip().lower(),
+        "payment_utr": (payload.utr or "").strip(),
+        "payment_status": "verification_pending",
+        "payment_claimed_at": now,
+    }
+    await db.orders.update_one({"_id": oidv}, {"$set": update})
+    return {"ok": True, "payment_status": "verification_pending", "order_status": order.get("status", "pending")}
 
 
 
@@ -2572,10 +2578,9 @@ async def get_low_stock_whatsapp_message(
 
 
 
-_ALLOWED_STATUSES = {"pending", "confirmed", "payment_pending_verification", "paid", "packed", "shipped", "delivered", "cancelled"}
+_ALLOWED_STATUSES = {"pending", "confirmed", "packed", "shipped", "delivered", "cancelled"}
 
 _STATUS_COPY = {
-    "paid": ("Payment confirmed · Satthamma Farms", "We've verified your payment. Your harvest is being prepared."),
     "packed": ("Your order is packed 🌾", "Your order has been packed with care and is ready for dispatch."),
     "shipped": ("On its way! 🚚", "Your order has left the farm and is on its way to you."),
     "delivered": ("Delivered — thank you!", "Your order has been delivered. We hope every grain brings joy to your kitchen."),
@@ -2618,10 +2623,26 @@ async def admin_update_order_status(
 
         current_status = order.get("status", "pending")
 
-        if current_status == "cancelled" and payload.status != "cancelled":
+        # WhatsApp order lifecycle. Payment is tracked independently.
+        allowed_next = {
+            "pending": {"confirmed", "cancelled"},
+            "confirmed": {"packed", "cancelled"},
+            "packed": {"shipped", "cancelled"},
+            "shipped": {"delivered"},
+            "delivered": set(),
+            "cancelled": set(),
+        }
+
+        if payload.status == current_status:
+            return False
+
+        if payload.status not in allowed_next.get(current_status, set()):
             raise HTTPException(
                 status_code=409,
-                detail="A cancelled order cannot be reopened. Please create a new order."
+                detail=(
+                    f"Cannot change order status from {current_status} "
+                    f"to {payload.status}. Orders can only be cancelled before shipping."
+                )
             )
 
         if (
@@ -2632,10 +2653,6 @@ async def admin_update_order_status(
                 status_code=409,
                 detail="This order's inventory has already been restored. Create a new order."
             )
-
-        # Repeated requests must not process inventory again.
-        if current_status == payload.status:
-            return False
 
         if payload.status == "confirmed":
             await deduct_order_inventory(
