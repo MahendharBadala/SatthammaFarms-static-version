@@ -2280,192 +2280,146 @@ def get_order_inventory_requirements(order: dict) -> dict:
     return requirements
 
 
-async def deduct_order_inventory(order_id: ObjectId, order: dict):
-    # Avoid deducting stock twice for the same order
-    claim = await db.orders.update_one(
+async def deduct_order_inventory(
+    order_id: ObjectId,
+    order: dict,
+    session,
+):
+    # Do not deduct inventory twice.
+    if order.get("inventory_deducted") is True:
+        return
+
+    requirements = get_order_inventory_requirements(order)
+
+    for product_id, required_grams in requirements.items():
+        try:
+            product_oid = ObjectId(product_id)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid product in order."
+            ) from exc
+
+        result = await db.products.update_one(
+            {
+                "_id": product_oid,
+                "stock_grams": {"$gte": required_grams},
+            },
+            {
+                "$inc": {
+                    "stock_grams": -required_grams
+                }
+            },
+            session=session,
+        )
+
+        if result.modified_count != 1:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Insufficient stock for one or more products. "
+                    "Order was not confirmed."
+                )
+            )
+
+        await update_low_stock_alert_state(
+            product_oid,
+            session=session,
+        )
+
+    # Record successful deduction within the same transaction.
+    result = await db.orders.update_one(
         {
             "_id": order_id,
             "inventory_deducted": {"$ne": True},
-            "inventory_processing": {"$ne": True},
         },
         {
             "$set": {
-                "inventory_processing": True,
-                "inventory_processing_at": datetime.now(timezone.utc).isoformat(),
+                "inventory_deducted": True,
+                "inventory_deducted_at": datetime.now(
+                    timezone.utc
+                ).isoformat(),
             }
         },
+        session=session,
     )
 
-    if claim.modified_count != 1:
-        current_order = await db.orders.find_one({"_id": order_id})
-
-        if current_order and current_order.get("inventory_deducted") is True:
-            return
-
+    if result.modified_count != 1:
         raise HTTPException(
             status_code=409,
-            detail="Inventory processing is already in progress for this order."
+            detail="Order inventory was already processed."
         )
 
-    deducted = []
+async def restore_order_inventory(
+    order_id: ObjectId,
+    order: dict,
+    session,
+):
+    # Restore only if inventory was previously deducted.
+    if order.get("inventory_deducted") is not True:
+        return
 
-    try:
-        requirements = get_order_inventory_requirements(order)
+    if order.get("inventory_restored") is True:
+        return
 
-        for product_id, required_grams in requirements.items():
-            try:
-                product_oid = ObjectId(product_id)
-            except Exception:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid product in order."
-                )
+    requirements = get_order_inventory_requirements(order)
 
-            result = await db.products.update_one(
-                {
-                    "_id": product_oid,
-                    "stock_grams": {"$gte": required_grams},
-                },
-                {
-                    "$inc": {"stock_grams": -required_grams}
-                },
-            )
+    for product_id, required_grams in requirements.items():
+        try:
+            product_oid = ObjectId(product_id)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid product in order."
+            ) from exc
 
-            if result.modified_count != 1:
-                raise HTTPException(
-                    status_code=409,
-                    detail="Insufficient stock for one or more products. Order was not confirmed."
-                )
-
-            deducted.append((product_oid, required_grams))
-            await update_low_stock_alert_state(product_oid)
-
-        await db.orders.update_one(
+        result = await db.products.update_one(
             {
-                "_id": order_id,
-                "inventory_processing": True,
+                "_id": product_oid,
+                "stock_grams": {"$type": "number"},
             },
             {
-                "$set": {
-                    "inventory_deducted": True,
-                    "inventory_deducted_at": datetime.now(timezone.utc).isoformat(),
-                },
-                "$unset": {
-                    "inventory_processing": "",
-                    "inventory_processing_at": "",
-                },
-            },
-        )
-
-    except Exception:
-        # Restore any stock already deducted during this attempt
-        for product_oid, required_grams in reversed(deducted):
-            await db.products.update_one(
-                {"_id": product_oid},
-                {"$inc": {"stock_grams": required_grams}},
-            )
-
-        await db.orders.update_one(
-            {"_id": order_id},
-            {
-                "$unset": {
-                    "inventory_processing": "",
-                    "inventory_processing_at": "",
+                "$inc": {
+                    "stock_grams": required_grams
                 }
             },
+            session=session,
         )
 
-        raise
+        if result.modified_count != 1:
+            raise HTTPException(
+                status_code=500,
+                detail="Could not restore inventory for a product."
+            )
 
+        await update_low_stock_alert_state(
+            product_oid,
+            session=session,
+        )
 
-async def restore_order_inventory(order_id: ObjectId, order: dict):
-    # Restore only if stock was previously deducted
-    claim = await db.orders.update_one(
+    # Record restoration inside the same transaction.
+    result = await db.orders.update_one(
         {
             "_id": order_id,
             "inventory_deducted": True,
             "inventory_restored": {"$ne": True},
-            "inventory_restoring": {"$ne": True},
         },
         {
             "$set": {
-                "inventory_restoring": True,
-                "inventory_restoring_at": datetime.now(timezone.utc).isoformat(),
+                "inventory_restored": True,
+                "inventory_restored_at": datetime.now(
+                    timezone.utc
+                ).isoformat(),
             }
         },
+        session=session,
     )
 
-    if claim.modified_count != 1:
-        current_order = await db.orders.find_one({"_id": order_id})
-
-        if current_order and current_order.get("inventory_restored") is True:
-            return
-
-        if current_order and current_order.get("inventory_deducted") is not True:
-            return
-
+    if result.modified_count != 1:
         raise HTTPException(
             status_code=409,
-            detail="Inventory restoration is already in progress."
+            detail="Order inventory was already restored."
         )
-
-    restored = []
-
-    try:
-        requirements = get_order_inventory_requirements(order)
-
-        for product_id, required_grams in requirements.items():
-            product_oid = ObjectId(product_id)
-
-            result = await db.products.update_one(
-                {"_id": product_oid},
-                {"$inc": {"stock_grams": required_grams}},
-            )
-
-            if result.modified_count != 1:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Could not restore inventory for a product."
-                )
-
-            restored.append((product_oid, required_grams))
-            await update_low_stock_alert_state(product_oid)
-        await db.orders.update_one(
-            {
-                "_id": order_id,
-                "inventory_restoring": True,
-            },
-            {
-                "$set": {
-                    "inventory_restored": True,
-                    "inventory_restored_at": datetime.now(timezone.utc).isoformat(),
-                },
-                "$unset": {
-                    "inventory_restoring": "",
-                    "inventory_restoring_at": "",
-                },
-            },
-        )
-
-    except Exception:
-        # Reverse any partial restoration
-        for product_oid, required_grams in reversed(restored):
-            await db.products.update_one(
-                {"_id": product_oid},
-                {"$inc": {"stock_grams": -required_grams}},
-            )
-
-        await db.orders.update_one(
-            {"_id": order_id},
-            {
-                "$unset": {
-                    "inventory_restoring": "",
-                    "inventory_restoring_at": "",
-                }
-            },
-        )
-
-        raise
 
 
 LOW_STOCK_THRESHOLD_GRAMS = 10000
@@ -2648,60 +2602,108 @@ async def admin_update_order_status(
             detail="Invalid order id"
         ) from exc
 
-    order = await db.orders.find_one({"_id": oidv})
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    # Do not allow a cancelled order to be reopened.
-    if order.get("status") == "cancelled" and payload.status != "cancelled":
-        raise HTTPException(
-            status_code=409,
-            detail="A cancelled order cannot be reopened. Please create a new order."
-        )
-
-# Do not allow inventory-restored orders to be confirmed again.
-    if (
-        payload.status == "confirmed"
-        and order.get("inventory_restored") is True
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="This order's inventory has already been restored. Create a new order."
-        )
-
     now = datetime.now(timezone.utc).isoformat()
 
-    if payload.status == "confirmed":
-        await deduct_order_inventory(oidv, order)
+    async def transaction_callback(session):
+        order = await db.orders.find_one(
+            {"_id": oidv},
+            session=session,
+        )
 
-    if payload.status == "cancelled":
-        if order.get("inventory_deducted") is True:
-            await restore_order_inventory(oidv, order)
+        if not order:
+            raise HTTPException(
+                status_code=404,
+                detail="Order not found"
+            )
 
-    upd = {
-        "status": payload.status,
-        f"status_{payload.status}_at": now
-    }
+        current_status = order.get("status", "pending")
 
-    await db.orders.update_one(
-        {"_id": oidv},
-        {"$set": upd}
-    )
-    # Notify buyer by email when the status has customer-facing copy
-    if payload.status in _STATUS_COPY:
+        if current_status == "cancelled" and payload.status != "cancelled":
+            raise HTTPException(
+                status_code=409,
+                detail="A cancelled order cannot be reopened. Please create a new order."
+            )
+
+        if (
+            payload.status == "confirmed"
+            and order.get("inventory_restored") is True
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="This order's inventory has already been restored. Create a new order."
+            )
+
+        # Repeated requests must not process inventory again.
+        if current_status == payload.status:
+            return False
+
+        if payload.status == "confirmed":
+            await deduct_order_inventory(
+                oidv,
+                order,
+                session=session,
+            )
+
+        elif payload.status == "cancelled":
+            if order.get("inventory_deducted") is True:
+                await restore_order_inventory(
+                    oidv,
+                    order,
+                    session=session,
+                )
+
+        result = await db.orders.update_one(
+            {
+                "_id": oidv,
+                "status": current_status,
+            },
+            {
+                "$set": {
+                    "status": payload.status,
+                    f"status_{payload.status}_at": now,
+                }
+            },
+            session=session,
+        )
+
+        if result.modified_count != 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Order status changed. Please refresh and try again."
+            )
+
+        return True
+
+    # with_transaction handles eligible transient transaction retries.
+    async with await client.start_session() as session:
+        status_changed = await session.with_transaction(
+            transaction_callback
+        )
+
+    # Send email only after a successful, committed status change.
+    if status_changed and payload.status in _STATUS_COPY:
         order = await db.orders.find_one({"_id": oidv})
         buyer_email = (order or {}).get("user_email", "")
+
         if buyer_email:
             subj, msg = _STATUS_COPY[payload.status]
-            html = (f"<div style='font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#F9F6F0;border-radius:12px'>"
-                    f"<div style='font-size:12px;letter-spacing:.2em;color:#C5684B'>SATTHAMMA FARMS</div>"
-                    f"<h1 style='font-family:Georgia,serif;color:#2C4C3B'>{subj}</h1>"
-                    f"<p>Order <b>{str(oidv)[-8:].upper()}</b> · Total <b style='color:#2C4C3B'>₹{order.get('total',0)}</b></p>"
-                    f"<p>{msg}</p>"
-                    f"<p style='font-family:Georgia,serif;font-style:italic;color:#C5684B'>\"prathiokkari intaa, nanyamaina panta\"</p></div>")
+
+            html = (
+                f"<div style='font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:24px;background:#F9F6F0;border-radius:12px'>"
+                f"<div style='font-size:12px;letter-spacing:.2em;color:#C5684B'>SATTHAMMA FARMS</div>"
+                f"<h1 style='font-family:Georgia,serif;color:#2C4C3B'>{subj}</h1>"
+                f"<p>Order <b>{str(oidv)[-8:].upper()}</b> · Total <b style='color:#2C4C3B'>₹{order.get('total',0)}</b></p>"
+                f"<p>{msg}</p>"
+                f"<p style='font-family:Georgia,serif;font-style:italic;color:#C5684B'>\"prathiokkari intaa, nanyamaina panta\"</p></div>"
+            )
+
             _send_email(buyer_email, subj, html, plain=msg)
-    return {"ok": True, "status": payload.status}
+
+    return {
+        "ok": True,
+        "status": payload.status
+    }
+    
 
 # --- Coupons ---
 def _coupon_to_out(c: dict) -> dict:
