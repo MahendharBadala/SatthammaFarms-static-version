@@ -2513,10 +2513,19 @@ async def update_low_stock_alert_state(
 async def get_low_stock_alerts(
     _admin: dict = Depends(get_admin_user)
 ):
+    # Synchronize alert status for existing products.
+    products = await db.products.find(
+        {"stock_grams": {"$exists": True}}
+    ).to_list(5000)
+
+    for product in products:
+        await update_low_stock_alert_state(product["_id"])
+
+    # Retrieve all currently active low-stock alerts.
     docs = await db.products.find(
         {
             "low_stock_alert_active": True,
-            "stock_grams": {"$exists": True},
+            "stock_grams": {"$lt": LOW_STOCK_THRESHOLD_GRAMS}
         },
         {
             "name": 1,
@@ -2541,7 +2550,6 @@ async def get_low_stock_alerts(
         }
         for doc in docs
     ]
-
 
 @api.get("/admin/low-stock-alerts/{product_id}/whatsapp")
 async def get_low_stock_whatsapp_message(
