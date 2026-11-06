@@ -50,6 +50,7 @@ export default function Admin() {
   const [tab, setTab] = useState("products");
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [lowStockAlerts, setLowStockAlerts] = useState([]);
   const [settings, setSettings] = useState(null);
   const [siteSettings, setSiteSettings] = useState(null);
   const [coupons, setCoupons] = useState([]);
@@ -64,7 +65,7 @@ export default function Admin() {
   const [selectedRecommendationProduct, setSelectedRecommendationProduct] = useState("");
   const [recommendationIds, setRecommendationIds] = useState([]);
   const [recommendationsSaving, setRecommendationsSaving] = useState(false);
-  const [lowStockAlerts, setLowStockAlerts] = useState([]);
+  
   // Tracks ids currently mid-delete so a second click can't fire a duplicate
   // request against an item that's already gone (was the source of the
   // "delete sometimes does nothing" glitch).
@@ -93,7 +94,7 @@ export default function Admin() {
    setBanners(b.data);
    setSiteSettings(si.data);
    setReviews(r);
-   setLowStockAlerts(lowStock.data);
+   setLowStockAlerts(lowStock.data || []);
   }, []);
 
   const handleApproveReview = async (reviewId) => {
@@ -381,7 +382,7 @@ const tabs = [
     { k: "site", label: "Site content" },
     { k: "payments", label: "Payments" },
     { k: "recommended", label: "Recommended" },
-    { k: "lowstock", label: `Low Stock (${lowStockAlerts.length})` },
+    { k: "lowstock", label: `Low Stock (${(lowStockAlerts || []).length})` },
 ];
 
 
