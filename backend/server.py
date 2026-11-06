@@ -1243,13 +1243,40 @@ def validate_product_inventory(payload: ProductIn):
 @api.post("/products")
 async def create_product(payload: ProductIn, _admin: dict = Depends(get_admin_user)):
     validate_product_inventory(payload)
-    
+
     doc = payload.model_dump()
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
     res = await db.products.insert_one(doc)
+
+    # Check whether the newly created product is below the low-stock threshold
+    await update_low_stock_alert_state(res.inserted_id)
+
     doc["_id"] = res.inserted_id
     return product_to_out(doc)
 
+
+@api.put("/products/{pid}")
+async def update_product(pid: str, payload: ProductIn, _admin: dict = Depends(get_admin_user)):
+    validate_product_inventory(payload)
+
+    try:
+        oid = ObjectId(pid)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid id") from exc
+
+    await db.products.update_one(
+        {"_id": oid},
+        {"$set": payload.model_dump(exclude_unset=True)}
+    )
+
+    # Refresh alert state after every manual product update
+    await update_low_stock_alert_state(oid)
+
+    doc: Optional[dict] = await db.products.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return product_to_out(doc)
 
 @api.put("/products/{pid}")
 async def update_product(pid: str, payload: ProductIn, _admin: dict = Depends(get_admin_user)):
