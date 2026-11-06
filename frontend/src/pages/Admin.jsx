@@ -15,6 +15,7 @@ import {
   BannersManager,
   SiteSettingsPanel,
   ReviewsManager,
+  LowStockAlerts,
 } from "../components/admin/AdminSections";
 import RewardGamesManager from "../components/admin/RewardGamesManager";
 import {
@@ -63,6 +64,7 @@ export default function Admin() {
   const [selectedRecommendationProduct, setSelectedRecommendationProduct] = useState("");
   const [recommendationIds, setRecommendationIds] = useState([]);
   const [recommendationsSaving, setRecommendationsSaving] = useState(false);
+  const [lowStockAlerts, setLowStockAlerts] = useState([]);
   // Tracks ids currently mid-delete so a second click can't fire a duplicate
   // request against an item that's already gone (was the source of the
   // "delete sometimes does nothing" glitch).
@@ -74,12 +76,13 @@ export default function Admin() {
   });
 
   const load = useCallback(async () => {
-  const [p, o, s, c, b, si, r] = await Promise.all([
+  const [p, o, s, c, b, si, r, lowStock] = await Promise.all([
   axios.get(`${API}/admin/products`),
   axios.get(`${API}/admin/orders`).catch(() => ({ data: [] })),
   axios.get(`${API}/admin/payments/settings`).catch(() => ({ data: null })),
   axios.get(`${API}/admin/coupons`).catch(() => ({ data: [] })),
   axios.get(`${API}/admin/banners`).catch(() => ({ data: [] })),
+  axios.get(`${API}/admin/low-stock-alerts`).catch(() => ({ data: [] })),
   axios.get(`${API}/site`).catch(() => ({ data: null })),
   fetchAdminReviews().catch(() => []),
   ]);
@@ -90,6 +93,7 @@ export default function Admin() {
    setBanners(b.data);
    setSiteSettings(si.data);
    setReviews(r);
+   setLowStockAlerts(lowStock.data);
   }, []);
 
   const handleApproveReview = async (reviewId) => {
@@ -377,6 +381,7 @@ const tabs = [
     { k: "site", label: "Site content" },
     { k: "payments", label: "Payments" },
     { k: "recommended", label: "Recommended" },
+    { k: "lowstock", label: `Low Stock (${lowStockAlerts.length})` },
 ];
 
 
@@ -668,6 +673,13 @@ const tabs = [
 )}
       {tab === "coupons" && <CouponsManager coupons={coupons} onSave={saveCoupon} onDelete={deleteCoupon} onToggleActive={toggleCouponActive} deletingIds={deletingIds} />}
       {tab === "games" && <RewardGamesManager />}
+      {tab === "lowstock" && (
+        <LowStockAlerts
+          alerts={lowStockAlerts}
+          onRefresh={load}
+          whatsappNumber={siteSettings?.whatsapp_number}
+        />
+      )}
       {tab === "banners" && <BannersManager banners={banners} onSave={saveBanner} onDelete={deleteBanner} onToggleActive={toggleBannerActive} deletingIds={deletingIds} />}
       {tab === "site" && <SiteSettingsPanel site={siteSettings} onSave={saveSite} />}
       {tab === "payments" && <PaymentSettingsPanel settings={settings} onSave={async (payload) => {
